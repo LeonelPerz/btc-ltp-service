@@ -71,7 +71,7 @@ GET /api/v1/pairs
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/LeonelPerz/btc-ltp-service
 cd btc-ltp-service
 
 # Build and start the service
