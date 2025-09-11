@@ -96,7 +96,7 @@ docker run -p 8080:8080 btc-ltp-service
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/LeonelPerz/btc-ltp-service
 cd btc-ltp-service
 
 # Download dependencies
