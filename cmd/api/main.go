@@ -11,32 +11,65 @@ import (
 
 	"btc-ltp-service/internal/cache"
 	"btc-ltp-service/internal/client/kraken"
+	"btc-ltp-service/internal/config"
 	"btc-ltp-service/internal/handler"
+	"btc-ltp-service/internal/logger"
+	"btc-ltp-service/internal/metrics"
+	"btc-ltp-service/internal/model"
 	"btc-ltp-service/internal/service"
-)
-
-const (
-	DefaultPort = "8080"
-	ShutdownTimeout = 30 * time.Second
 )
 
 func main() {
 	log.Println("Starting BTC Last Traded Price Service...")
 
-	// Get port from environment variable or use default
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = DefaultPort
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Initialize supported pairs based on configuration
+	if err := model.InitializeSupportedPairs(cfg.App.SupportedPairs); err != nil {
+		log.Fatalf("Failed to initialize supported pairs: %v", err)
+	}
+
+	log.Printf("Initialized %d supported pairs: %v", len(cfg.App.SupportedPairs), cfg.App.SupportedPairs)
+
+	// Configure structured logging
+	logger.SetLogLevel(cfg.App.LogLevel)
+	structuredLogger := logger.GetLogger()
+
+	// Create root context for background operations
+	ctx := context.Background()
+	ctx = logger.WithRequestID(ctx)
+
 	// Initialize components
-	log.Println("Initializing service components...")
+	structuredLogger.Info("Initializing service components...")
 
-	// Create Kraken API client
-	krakenClient := kraken.NewClient()
+	// Create Kraken API client with timeout configuration
+	krakenClient := kraken.NewClientWithTimeout(cfg.Kraken.Timeout)
 
-	// Create price cache
-	priceCache := cache.NewPriceCache()
+	// Import metrics to initialize them
+	_ = metrics.HTTPRequestsTotal
+
+	// Create cache based on configuration
+	cacheConfig := cache.CacheConfig{
+		TTL:           cfg.Cache.TTL,
+		RedisAddr:     cfg.Redis.Addr,
+		RedisPassword: cfg.Redis.Password,
+		RedisDB:       cfg.Redis.DB,
+	}
+
+	priceCache, err := cache.NewCacheFromConfig(cfg.Cache.Backend, cacheConfig)
+	if err != nil {
+		structuredLogger.WithField("error", err.Error()).Fatal("Failed to create cache")
+	}
+	defer priceCache.Close()
+
+	structuredLogger.WithField("backend", cfg.Cache.Backend).Info("Cache initialized successfully")
+
+	// Set service info metrics
+	metrics.SetServiceInfo("1.0.0", cfg.Cache.Backend)
 
 	// Create LTP service
 	ltpService := service.NewLTPService(krakenClient, priceCache)
@@ -45,67 +78,79 @@ func main() {
 	ltpHandler := handler.NewLTPHandler(ltpService)
 
 	// Create HTTP server
-	server := handler.CreateServer(ltpHandler, port)
+	server := handler.CreateServer(ltpHandler, cfg.Server.Port)
 
-	log.Printf("Server starting on port %s", port)
+	structuredLogger.WithField("port", cfg.Server.Port).Info("Server starting")
 
 	// Start server in a goroutine
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			structuredLogger.WithField("error", err.Error()).Fatal("Failed to start server")
 		}
 	}()
 
 	// Pre-warm cache with initial data
-	log.Println("Pre-warming cache with initial price data...")
+	structuredLogger.Info("Pre-warming cache with initial price data...")
 	if err := ltpService.RefreshAllPrices(); err != nil {
-		log.Printf("Warning: Failed to pre-warm cache: %v", err)
+		structuredLogger.WithField("error", err.Error()).Warn("Failed to pre-warm cache")
 	} else {
-		log.Println("Cache pre-warmed successfully")
+		structuredLogger.Info("Cache pre-warmed successfully")
 	}
 
 	// Start background price refresh routine
-	go startPriceRefreshRoutine(ltpService)
+	go startPriceRefreshRoutine(ltpService, cfg.Cache.RefreshInterval, ctx)
 
-	log.Printf("BTC LTP Service is running on http://localhost:%s", port)
-	log.Printf("Health check available at: http://localhost:%s/health", port)
-	log.Printf("LTP endpoint available at: http://localhost:%s/api/v1/ltp", port)
-	log.Printf("Supported pairs endpoint available at: http://localhost:%s/api/v1/pairs", port)
+	structuredLogger.WithFields(map[string]interface{}{
+		"port": cfg.Server.Port,
+		"endpoints": map[string]string{
+			"health":  "/health",
+			"ltp":     "/api/v1/ltp",
+			"pairs":   "/api/v1/pairs",
+			"metrics": "/metrics",
+		},
+	}).Info("BTC LTP Service is running")
+
+	log.Printf("BTC LTP Service is running on http://localhost:%s", cfg.Server.Port)
+	log.Printf("Health check available at: http://localhost:%s/health", cfg.Server.Port)
+	log.Printf("LTP endpoint available at: http://localhost:%s/api/v1/ltp", cfg.Server.Port)
+	log.Printf("Supported pairs endpoint available at: http://localhost:%s/api/v1/pairs", cfg.Server.Port)
+	log.Printf("Metrics available at: http://localhost:%s/metrics", cfg.Server.Port)
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	structuredLogger.Info("Shutting down server...")
 
 	// Create a context with timeout for graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
 	// Shutdown server
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		structuredLogger.WithField("error", err.Error()).Fatal("Server forced to shutdown")
 	}
 
-	log.Println("Server shutdown completed")
+	structuredLogger.Info("Server shutdown completed")
 }
 
 // startPriceRefreshRoutine starts a background routine to refresh prices periodically
-func startPriceRefreshRoutine(ltpService *service.LTPService) {
-	// Refresh prices every 30 seconds to ensure cache stays fresh
-	ticker := time.NewTicker(30 * time.Second)
+func startPriceRefreshRoutine(ltpService *service.LTPService, refreshInterval time.Duration, ctx context.Context) {
+	// Refresh prices at configured intervals to ensure cache stays fresh
+	ticker := time.NewTicker(refreshInterval)
 	defer ticker.Stop()
 
-	log.Println("Starting background price refresh routine (every 30 seconds)")
+	structuredLogger := logger.GetLogger()
+	structuredLogger.WithField("interval", refreshInterval.String()).Info("Starting background price refresh routine")
 
 	for {
 		select {
 		case <-ticker.C:
 			if err := ltpService.RefreshAllPrices(); err != nil {
-				log.Printf("Background refresh failed: %v", err)
+				structuredLogger.WithField("error", err.Error()).Error("Background price refresh failed")
 			} else {
-				log.Println("Background price refresh completed")
+				structuredLogger.Info("Background price refresh completed")
 			}
 		}
 	}

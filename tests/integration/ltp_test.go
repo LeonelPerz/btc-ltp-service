@@ -62,7 +62,7 @@ func TestLTPIntegration(t *testing.T) {
 
 		pairs := response["supported_pairs"]
 		expectedPairs := []string{"BTC/CHF", "BTC/EUR", "BTC/USD"}
-		
+
 		if len(pairs) != len(expectedPairs) {
 			t.Errorf("Expected %d pairs, got %d", len(expectedPairs), len(pairs))
 		}
@@ -216,7 +216,7 @@ func TestKrakenClientIntegration(t *testing.T) {
 
 	t.Run("TestGetTickerDataValidPairs", func(t *testing.T) {
 		pairs := []string{"BTC/USD", "BTC/EUR"}
-		
+
 		resp, err := client.GetTickerData(pairs)
 		if err != nil {
 			t.Fatalf("Failed to get ticker data: %v", err)
@@ -253,7 +253,7 @@ func TestKrakenClientIntegration(t *testing.T) {
 
 	t.Run("TestGetTickerDataInvalidPair", func(t *testing.T) {
 		pairs := []string{"INVALID/PAIR"}
-		
+
 		_, err := client.GetTickerData(pairs)
 		if err == nil {
 			t.Error("Expected error for invalid pair, got nil")

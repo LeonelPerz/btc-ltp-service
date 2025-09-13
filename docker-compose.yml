@@ -10,6 +10,18 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - CACHE_BACKEND=memory  #redis|memory
+      - CACHE_TTL=1m
+      - CACHE_REFRESH_INTERVAL=30s
+      - KRAKEN_TIMEOUT=10s
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - LOG_LEVEL=info
+      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,ETH/USD,ETH/EUR,ETH/BTC,LTC/USD,LTC/EUR,LTC/BTC
+    # depends_on:   #Uncomment this if you want to use Redis
+      # redis:
+        # condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -19,6 +31,28 @@ services:
       start_period: 40s
     networks:
       - btc-ltp-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: btc-ltp-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - btc-ltp-network
+
+volumes:
+  redis_data:
+    driver: local
 
 networks:
   btc-ltp-network:

@@ -4,20 +4,22 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"time"
 
 	"btc-ltp-service/internal/cache"
 	"btc-ltp-service/internal/client/kraken"
+	"btc-ltp-service/internal/metrics"
 	"btc-ltp-service/internal/model"
 )
 
 // LTPService handles Last Traded Price operations
 type LTPService struct {
 	krakenClient *kraken.Client
-	priceCache   *cache.PriceCache
+	priceCache   cache.Cache
 }
 
 // NewLTPService creates a new LTP service instance
-func NewLTPService(krakenClient *kraken.Client, priceCache *cache.PriceCache) *LTPService {
+func NewLTPService(krakenClient *kraken.Client, priceCache cache.Cache) *LTPService {
 	return &LTPService{
 		krakenClient: krakenClient,
 		priceCache:   priceCache,
@@ -38,10 +40,19 @@ func (s *LTPService) GetLTP(pairs []string) (*model.LTPResponse, error) {
 	}
 
 	// Try to get cached prices first
-	cachedPrices := s.priceCache.GetMultiple(pairs)
+	cachedPrices, err := s.priceCache.GetMultiple(pairs)
+	if err != nil {
+		log.Printf("Warning: failed to get cached prices: %v", err)
+		cachedPrices = make(map[string]float64)
+	}
 
 	// Determine which pairs need fresh data
-	expiredPairs := s.priceCache.GetExpiredPairs(pairs)
+	expiredPairs, err := s.priceCache.GetExpiredPairs(pairs)
+	if err != nil {
+		log.Printf("Warning: failed to get expired pairs: %v", err)
+		// If we can't determine expired pairs, fetch all
+		expiredPairs = pairs
+	}
 
 	// Fetch fresh data for expired pairs
 	if len(expiredPairs) > 0 {
@@ -50,9 +61,13 @@ func (s *LTPService) GetLTP(pairs []string) (*model.LTPResponse, error) {
 			// Continue with cached data if available
 		} else {
 			// Update cached prices with fresh data
-			freshPrices := s.priceCache.GetMultiple(expiredPairs)
-			for pair, price := range freshPrices {
-				cachedPrices[pair] = price
+			freshPrices, err := s.priceCache.GetMultiple(expiredPairs)
+			if err != nil {
+				log.Printf("Warning: failed to get fresh prices: %v", err)
+			} else {
+				for pair, price := range freshPrices {
+					cachedPrices[pair] = price
+				}
 			}
 		}
 	}
@@ -112,8 +127,16 @@ func (s *LTPService) fetchAndCachePrices(pairs []string) error {
 
 	// Update cache with fresh prices
 	if len(prices) > 0 {
-		s.priceCache.SetMultiple(prices)
-		log.Printf("Updated cache with %d fresh prices", len(prices))
+		if err := s.priceCache.SetMultiple(prices); err != nil {
+			log.Printf("Warning: failed to update cache: %v", err)
+		} else {
+			log.Printf("Updated cache with %d fresh prices", len(prices))
+
+			// Update current price metrics
+			for pair, price := range prices {
+				metrics.UpdateCurrentPrice(pair, price)
+			}
+		}
 	}
 
 	return nil
@@ -143,8 +166,19 @@ func (s *LTPService) getAllSupportedPairs() []string {
 
 // RefreshAllPrices forcefully refreshes prices for all supported pairs
 func (s *LTPService) RefreshAllPrices() error {
+	start := time.Now()
 	allPairs := s.getAllSupportedPairs()
-	return s.fetchAndCachePrices(allPairs)
+
+	err := s.fetchAndCachePrices(allPairs)
+	duration := time.Since(start)
+
+	if err != nil {
+		metrics.RecordPriceRefresh("error", duration)
+		return err
+	}
+
+	metrics.RecordPriceRefresh("success", duration)
+	return nil
 }
 
 // GetSupportedPairs returns the list of supported trading pairs
