@@ -12,18 +12,45 @@ import (
 	"btc-ltp-service/internal/model"
 )
 
+// KrakenClient defines the interface for interacting with Kraken API
+type KrakenClient interface {
+	GetTickerData(pairs []string) (*model.KrakenResponse, error)
+	Start(pairs []string) error
+	Close() error
+	GetConnectionStatus() map[string]interface{}
+	IsWebSocketConnected() bool
+	IsFallbackMode() bool
+}
+
 // LTPService handles Last Traded Price operations
 type LTPService struct {
-	krakenClient *kraken.Client
+	krakenClient KrakenClient
 	priceCache   cache.Cache
 }
 
 // NewLTPService creates a new LTP service instance
-func NewLTPService(krakenClient *kraken.Client, priceCache cache.Cache) *LTPService {
-	return &LTPService{
+func NewLTPService(krakenClient KrakenClient, priceCache cache.Cache) *LTPService {
+	service := &LTPService{
 		krakenClient: krakenClient,
 		priceCache:   priceCache,
 	}
+	return service
+}
+
+// StartWebSocketConnection starts WebSocket connection for real-time updates
+func (s *LTPService) StartWebSocketConnection() error {
+	allPairs := s.getAllSupportedPairs()
+	return s.krakenClient.Start(allPairs)
+}
+
+// GetConnectionStatus returns the current connection status
+func (s *LTPService) GetConnectionStatus() map[string]interface{} {
+	return s.krakenClient.GetConnectionStatus()
+}
+
+// Close closes all connections
+func (s *LTPService) Close() error {
+	return s.krakenClient.Close()
 }
 
 // GetLTP retrieves Last Traded Prices for the specified pairs

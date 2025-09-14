@@ -38,11 +38,9 @@ type CachedPrice struct {
 var PairMappings = map[string]string{
 	// Bitcoin pairs
 	"BTC/USD": "XXBTZUSD",
-	"BTC/CHF": "XBTCHF",
 	"BTC/EUR": "XXBTZEUR",
 	"BTC/GBP": "XXBTZGBP",
 	"BTC/CAD": "XXBTZCAD",
-	"BTC/AUD": "XXBTZAUD",
 	"BTC/JPY": "XXBTZJPY",
 
 	// Ethereum pairs
@@ -79,10 +77,8 @@ var KrakenToStandardPair = map[string]string{
 	// Ethereum pairs
 	"XETHZUSD": "ETH/USD",
 	"XETHZEUR": "ETH/EUR",
-	"XETHZCHF": "ETH/CHF",
 	"XETHZGBP": "ETH/GBP",
 	"XETHZCAD": "ETH/CAD",
-	"XETHZAUD": "ETH/AUD",
 	"XETHZJPY": "ETH/JPY",
 	"XETHXXBT": "ETH/BTC",
 
@@ -117,4 +113,35 @@ func GetAvailablePairs() []string {
 		pairs = append(pairs, pair)
 	}
 	return pairs
+}
+
+// WebSocket message structures for Kraken WebSocket API
+
+// KrakenWSMessage represents a generic WebSocket message
+type KrakenWSMessage struct {
+	Event        string      `json:"event,omitempty"`
+	Pair         []string    `json:"pair,omitempty"`
+	Subscription interface{} `json:"subscription,omitempty"`
+	Data         interface{} `json:"data,omitempty"`
+	ChannelID    int         `json:"channelID,omitempty"`
+	ChannelName  string      `json:"channelName,omitempty"`
+	ErrorMessage string      `json:"errorMessage,omitempty"`
+}
+
+// KrakenWSSubscription represents subscription details
+type KrakenWSSubscription struct {
+	Name string `json:"name"`
+}
+
+// KrakenWSTickerData represents ticker data from WebSocket
+type KrakenWSTickerData struct {
+	Ask    []string `json:"a,omitempty"` // [price, whole_lot_volume, lot_volume]
+	Bid    []string `json:"b,omitempty"` // [price, whole_lot_volume, lot_volume]
+	Close  []string `json:"c,omitempty"` // [price, lot_volume] - Last trade closed
+	Volume []string `json:"v,omitempty"` // [today, last_24_hours]
+	VWAP   []string `json:"p,omitempty"` // [today, last_24_hours] - volume weighted average price
+	Trades []int    `json:"t,omitempty"` // [today, last_24_hours] - number of trades
+	Low    []string `json:"l,omitempty"` // [today, last_24_hours]
+	High   []string `json:"h,omitempty"` // [today, last_24_hours]
+	Open   []string `json:"o,omitempty"` // [today, last_24_hours]
 }

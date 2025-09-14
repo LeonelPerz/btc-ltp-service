@@ -31,8 +31,13 @@ type CacheConfig struct {
 
 // KrakenConfig holds Kraken API-related configuration
 type KrakenConfig struct {
-	Timeout time.Duration `mapstructure:"timeout"`
-	BaseURL string        `mapstructure:"base_url"`
+	Timeout           time.Duration `mapstructure:"timeout"`
+	BaseURL           string        `mapstructure:"base_url"`
+	WebSocketEnabled  bool          `mapstructure:"websocket_enabled"`
+	WebSocketURL      string        `mapstructure:"websocket_url"`
+	WebSocketTimeout  time.Duration `mapstructure:"websocket_timeout"`
+	ReconnectDelay    time.Duration `mapstructure:"reconnect_delay"`
+	MaxReconnectTries int           `mapstructure:"max_reconnect_tries"`
 }
 
 // RedisConfig holds Redis-related configuration
@@ -59,12 +64,17 @@ func Load() (*Config, error) {
 
 	viper.SetDefault("kraken.timeout", "10s")
 	viper.SetDefault("kraken.base_url", "https://api.kraken.com/0/public")
+	viper.SetDefault("kraken.websocket_enabled", true)
+	viper.SetDefault("kraken.websocket_url", "wss://ws.kraken.com/")
+	viper.SetDefault("kraken.websocket_timeout", "90s") // Further increased for network issues
+	viper.SetDefault("kraken.reconnect_delay", "5s")
+	viper.SetDefault("kraken.max_reconnect_tries", 5)
 
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
 
-	viper.SetDefault("app.supported_pairs", []string{"BTC/USD", "BTC/EUR", "BTC/CHF"})
+	viper.SetDefault("app.supported_pairs", []string{"BTC/USD", "BTC/EUR", "BTC/CAD"})
 	viper.SetDefault("app.log_level", "info")
 
 	// Bind environment variables
@@ -73,6 +83,11 @@ func Load() (*Config, error) {
 	viper.BindEnv("cache.ttl", "CACHE_TTL")
 	viper.BindEnv("cache.refresh_interval", "CACHE_REFRESH_INTERVAL")
 	viper.BindEnv("kraken.timeout", "KRAKEN_TIMEOUT")
+	viper.BindEnv("kraken.websocket_enabled", "KRAKEN_WEBSOCKET_ENABLED")
+	viper.BindEnv("kraken.websocket_url", "KRAKEN_WEBSOCKET_URL")
+	viper.BindEnv("kraken.websocket_timeout", "KRAKEN_WEBSOCKET_TIMEOUT")
+	viper.BindEnv("kraken.reconnect_delay", "KRAKEN_RECONNECT_DELAY")
+	viper.BindEnv("kraken.max_reconnect_tries", "KRAKEN_MAX_RECONNECT_TRIES")
 	viper.BindEnv("redis.addr", "REDIS_ADDR")
 	viper.BindEnv("redis.password", "REDIS_PASSWORD")
 	viper.BindEnv("redis.db", "REDIS_DB")

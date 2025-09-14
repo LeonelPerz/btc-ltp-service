@@ -6,23 +6,32 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"btc-ltp-service/internal/docs"
 	"btc-ltp-service/internal/logger"
 	"btc-ltp-service/internal/middleware"
-	"btc-ltp-service/internal/service"
+	"btc-ltp-service/internal/model"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// LTPServiceInterface defines the interface for LTP service operations
+type LTPServiceInterface interface {
+	GetLTP(pairs []string) (*model.LTPResponse, error)
+	GetSupportedPairs() []string
+	RefreshAllPrices() error
+	GetConnectionStatus() map[string]interface{}
+}
+
 // LTPHandler handles HTTP requests for Last Traded Price endpoints
 type LTPHandler struct {
-	ltpService *service.LTPService
+	ltpService LTPServiceInterface
 }
 
 // NewLTPHandler creates a new LTP handler instance
-func NewLTPHandler(ltpService *service.LTPService) *LTPHandler {
+func NewLTPHandler(ltpService LTPServiceInterface) *LTPHandler {
 	return &LTPHandler{
 		ltpService: ltpService,
 	}
@@ -125,6 +134,30 @@ func (h *LTPHandler) HandleSupportedPairs(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// HandleConnectionStatus handles requests for connection status information
+func (h *LTPHandler) HandleConnectionStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.writeErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	status := h.ltpService.GetConnectionStatus()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	response := map[string]interface{}{
+		"status":     "ok",
+		"connection": status,
+		"timestamp":  time.Now().Unix(),
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding connection status response: %v", err)
+		h.writeErrorResponse(w, http.StatusInternalServerError, "Failed to encode response")
+		return
+	}
+}
+
 // parsePairsFromQuery extracts trading pairs from query parameters
 // Supports both "pair" and "pairs" query parameters
 // Examples:
@@ -190,6 +223,7 @@ func (h *LTPHandler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/ltp", h.HandleLTP)
 	mux.HandleFunc("/health", h.HandleHealth)
 	mux.HandleFunc("/api/v1/pairs", h.HandleSupportedPairs)
+	mux.HandleFunc("/api/v1/status", h.HandleConnectionStatus)
 
 	// Monitoring endpoints
 	mux.Handle("/metrics", promhttp.Handler())

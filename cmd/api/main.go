@@ -46,8 +46,8 @@ func main() {
 	// Initialize components
 	structuredLogger.Info("Initializing service components...")
 
-	// Create Kraken API client with timeout configuration
-	krakenClient := kraken.NewClientWithTimeout(cfg.Kraken.Timeout)
+	// Create Kraken hybrid client with WebSocket and REST fallback
+	krakenClient := kraken.NewHybridClient(cfg.Kraken)
 
 	// Import metrics to initialize them
 	_ = metrics.HTTPRequestsTotal
@@ -74,6 +74,9 @@ func main() {
 	// Create LTP service
 	ltpService := service.NewLTPService(krakenClient, priceCache)
 
+	// Ensure proper cleanup of connections
+	defer ltpService.Close()
+
 	// Create HTTP handler
 	ltpHandler := handler.NewLTPHandler(ltpService)
 
@@ -89,6 +92,14 @@ func main() {
 		}
 	}()
 
+	// Start WebSocket connection for real-time updates
+	structuredLogger.Info("Starting WebSocket connection for real-time price updates...")
+	if err := ltpService.StartWebSocketConnection(); err != nil {
+		structuredLogger.WithField("error", err.Error()).Warn("Failed to start WebSocket connection, will use REST fallback")
+	} else {
+		structuredLogger.Info("WebSocket connection initialized successfully")
+	}
+
 	// Pre-warm cache with initial data
 	structuredLogger.Info("Pre-warming cache with initial price data...")
 	if err := ltpService.RefreshAllPrices(); err != nil {
@@ -100,21 +111,40 @@ func main() {
 	// Start background price refresh routine
 	go startPriceRefreshRoutine(ltpService, cfg.Cache.RefreshInterval, ctx)
 
+	// Log connection status
+	connectionStatus := ltpService.GetConnectionStatus()
+
 	structuredLogger.WithFields(map[string]interface{}{
 		"port": cfg.Server.Port,
 		"endpoints": map[string]string{
 			"health":  "/health",
 			"ltp":     "/api/v1/ltp",
 			"pairs":   "/api/v1/pairs",
+			"status":  "/api/v1/status",
 			"metrics": "/metrics",
 		},
+		"websocket_enabled":   connectionStatus["websocket_enabled"],
+		"websocket_connected": connectionStatus["websocket_connected"],
+		"fallback_mode":       connectionStatus["fallback_mode"],
 	}).Info("BTC LTP Service is running")
 
 	log.Printf("BTC LTP Service is running on http://localhost:%s", cfg.Server.Port)
 	log.Printf("Health check available at: http://localhost:%s/health", cfg.Server.Port)
 	log.Printf("LTP endpoint available at: http://localhost:%s/api/v1/ltp", cfg.Server.Port)
 	log.Printf("Supported pairs endpoint available at: http://localhost:%s/api/v1/pairs", cfg.Server.Port)
+	log.Printf("Connection status endpoint available at: http://localhost:%s/api/v1/status", cfg.Server.Port)
 	log.Printf("Metrics available at: http://localhost:%s/metrics", cfg.Server.Port)
+
+	// Log WebSocket status
+	if connectionStatus["websocket_enabled"].(bool) {
+		if connectionStatus["websocket_connected"].(bool) {
+			log.Printf("✓ WebSocket connection: ACTIVE (real-time updates)")
+		} else {
+			log.Printf("✗ WebSocket connection: INACTIVE (using REST fallback)")
+		}
+	} else {
+		log.Printf("- WebSocket: DISABLED (REST-only mode)")
+	}
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
