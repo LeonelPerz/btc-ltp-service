@@ -3,6 +3,7 @@ package kraken
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"btc-ltp-service/internal/logger"
 	"btc-ltp-service/internal/metrics"
 	"btc-ltp-service/internal/model"
+	"btc-ltp-service/internal/pairs"
+	"btc-ltp-service/internal/ratelimit"
 )
 
 // HybridClient combines WebSocket and REST clients with automatic fallback
@@ -21,12 +24,33 @@ type HybridClient struct {
 	mu           sync.RWMutex
 	fallbackMode bool
 	lastWSUpdate time.Time
+	pairMapper   *pairs.PairMapper
 }
 
 // NewHybridClient creates a new hybrid client that uses WebSocket with REST fallback
 func NewHybridClient(cfg config.KrakenConfig) *HybridClient {
-	// Create REST client
-	restClient := NewClientWithTimeout(cfg.Timeout)
+	// Create REST client with rate limiting from config
+	restClient := createRestClientFromConfig(cfg)
+
+	// Create PairMapper with Kraken base URL from config
+	var krakenBaseURL string
+	if cfg.BaseURL != "" {
+		krakenBaseURL = cfg.BaseURL
+	} else {
+		krakenBaseURL = "https://api.kraken.com"
+	}
+	pairMapper := pairs.NewPairMapper(krakenBaseURL)
+
+	// Initialize PairMapper - if this fails, we'll log the error but continue
+	// The clients will fall back to legacy mappings
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := pairMapper.Initialize(ctx); err != nil {
+		logger.GetLogger().WithField("error", err.Error()).Error("Failed to initialize PairMapper, using legacy mappings")
+	} else {
+		logger.GetLogger().Info("PairMapper initialized successfully")
+	}
 
 	var wsClient *WebSocketClient
 
@@ -37,6 +61,7 @@ func NewHybridClient(cfg config.KrakenConfig) *HybridClient {
 			cfg.WebSocketTimeout,
 			cfg.MaxReconnectTries,
 			cfg.ReconnectDelay,
+			pairMapper,
 		)
 	}
 
@@ -45,6 +70,7 @@ func NewHybridClient(cfg config.KrakenConfig) *HybridClient {
 		wsClient:   wsClient,
 		config:     cfg,
 		wsEnabled:  cfg.WebSocketEnabled,
+		pairMapper: pairMapper,
 	}
 
 	// Set up WebSocket price update callback
@@ -64,6 +90,7 @@ func NewHybridClientWithTimeout(timeout time.Duration) *HybridClient {
 		WebSocketTimeout:  30 * time.Second,
 		ReconnectDelay:    5 * time.Second,
 		MaxReconnectTries: 5,
+		BaseURL:           "https://api.kraken.com",
 	}
 
 	return NewHybridClient(cfg)
@@ -279,4 +306,51 @@ func (h *HybridClient) HealthCheck() error {
 	// Always return healthy if REST is available
 	// WebSocket issues should not affect health since we have fallback
 	return nil
+}
+
+// createRestClientFromConfig crea un cliente REST con la configuración de rate limiting apropiada
+func createRestClientFromConfig(cfg config.KrakenConfig) *Client {
+	// Convertir config.RateLimitConfig a ratelimit.RateLimitConfig
+	rateLimitConfig := ratelimit.RateLimitConfig{
+		Enabled:      cfg.RateLimit.Enabled,
+		Conservative: cfg.RateLimit.Conservative,
+		Capacity:     cfg.RateLimit.Capacity,
+		RefillRate:   cfg.RateLimit.RefillRate,
+		RefillPeriod: cfg.RateLimit.RefillPeriod,
+	}
+
+	// Crear rate limiter desde configuración
+	rateLimiter := ratelimit.NewKrakenRateLimiterFromConfig(rateLimitConfig)
+
+	// Crear cliente REST con rate limiter personalizado
+	return &Client{
+		httpClient: &http.Client{
+			Timeout: cfg.Timeout,
+		},
+		baseURL:     KrakenAPIBaseURL,
+		timeout:     cfg.Timeout,
+		rateLimiter: rateLimiter,
+	}
+}
+
+// GetRateLimitStats retorna estadísticas del rate limiter del cliente REST
+func (h *HybridClient) GetRateLimitStats() map[string]interface{} {
+	if h.restClient == nil {
+		return map[string]interface{}{
+			"error": "REST client not available",
+		}
+	}
+	return h.restClient.GetRateLimitStats()
+}
+
+// EnableRateLimit habilita o deshabilita el rate limiting en el cliente REST
+func (h *HybridClient) EnableRateLimit(enabled bool) {
+	if h.restClient != nil {
+		h.restClient.EnableRateLimit(enabled)
+	}
+}
+
+// GetPairMapper returns the PairMapper instance
+func (h *HybridClient) GetPairMapper() *pairs.PairMapper {
+	return h.pairMapper
 }

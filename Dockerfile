@@ -22,8 +22,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/api/main
 # Final stage
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS calls to external APIs
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates for HTTPS calls to external APIs and wget for healthcheck
+RUN apk --no-cache add ca-certificates tzdata wget
 
 # Set timezone to UTC
 ENV TZ=UTC

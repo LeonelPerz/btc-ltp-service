@@ -39,9 +39,10 @@ func main() {
 	logger.SetLogLevel(cfg.App.LogLevel)
 	structuredLogger := logger.GetLogger()
 
-	// Create root context for background operations
-	ctx := context.Background()
+	// Create root context for background operations with cancellation
+	ctx, cancel := context.WithCancel(context.Background())
 	ctx = logger.WithRequestID(ctx)
+	defer cancel()
 
 	// Initialize components
 	structuredLogger.Info("Initializing service components...")
@@ -71,8 +72,8 @@ func main() {
 	// Set service info metrics
 	metrics.SetServiceInfo("1.0.0", cfg.Cache.Backend)
 
-	// Create LTP service
-	ltpService := service.NewLTPService(krakenClient, priceCache)
+	// Create LTP service with PairMapper from the hybrid client
+	ltpService := service.NewLTPService(krakenClient, priceCache, krakenClient.GetPairMapper())
 
 	// Ensure proper cleanup of connections
 	defer ltpService.Close()
@@ -138,9 +139,9 @@ func main() {
 	// Log WebSocket status
 	if connectionStatus["websocket_enabled"].(bool) {
 		if connectionStatus["websocket_connected"].(bool) {
-			log.Printf("✓ WebSocket connection: ACTIVE (real-time updates)")
+			log.Printf("WebSocket connection: ACTIVE (real-time updates)")
 		} else {
-			log.Printf("✗ WebSocket connection: INACTIVE (using REST fallback)")
+			log.Printf("WebSocket connection: INACTIVE (using REST fallback)")
 		}
 	} else {
 		log.Printf("- WebSocket: DISABLED (REST-only mode)")
@@ -151,18 +152,41 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	structuredLogger.Info("Shutting down server...")
+	structuredLogger.Info("Received shutdown signal, initiating graceful shutdown...")
+
+	// Cancel context to stop background routines
+	cancel()
+	structuredLogger.Info("Background routines shutdown initiated")
 
 	// Create a context with timeout for graceful shutdown
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+	defer shutdownCancel()
 
 	// Shutdown server
+	structuredLogger.Info("Shutting down HTTP server...")
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		structuredLogger.WithField("error", err.Error()).Fatal("Server forced to shutdown")
+		structuredLogger.WithField("error", err.Error()).Error("Server forced to shutdown")
+	} else {
+		structuredLogger.Info("HTTP server shutdown completed")
 	}
 
-	structuredLogger.Info("Server shutdown completed")
+	// Close LTP service connections (Kraken WebSocket/HTTP client)
+	structuredLogger.Info("Closing service connections...")
+	if err := ltpService.Close(); err != nil {
+		structuredLogger.WithField("error", err.Error()).Error("Failed to close service connections")
+	} else {
+		structuredLogger.Info("Service connections closed successfully")
+	}
+
+	// Close cache connections (Redis if applicable)
+	structuredLogger.Info("Closing cache connections...")
+	if err := priceCache.Close(); err != nil {
+		structuredLogger.WithField("error", err.Error()).Error("Failed to close cache connections")
+	} else {
+		structuredLogger.Info("Cache connections closed successfully")
+	}
+
+	structuredLogger.Info("Graceful shutdown completed successfully")
 }
 
 // startPriceRefreshRoutine starts a background routine to refresh prices periodically
@@ -182,6 +206,9 @@ func startPriceRefreshRoutine(ltpService *service.LTPService, refreshInterval ti
 			} else {
 				structuredLogger.Info("Background price refresh completed")
 			}
+		case <-ctx.Done():
+			structuredLogger.Info("Background price refresh routine shutting down")
+			return
 		}
 	}
 }

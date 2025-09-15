@@ -1,0 +1,54 @@
+# Docker Compose para BTC LTP Service con cache en memoria (desarrollo/testing)
+
+services:
+  btc-ltp-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc-ltp-service-memory
+    ports:
+      - "8080:8080"
+    environment:
+      # Server Configuration
+      - PORT=8080
+      
+      # Cache Configuration (Memory Only)
+      - CACHE_BACKEND=memory
+      - CACHE_TTL=1m
+      - CACHE_REFRESH_INTERVAL=30s
+      
+      # Kraken API Configuration
+      - KRAKEN_TIMEOUT=10s
+      - KRAKEN_BASE_URL=https://api.kraken.com
+      
+      # WebSocket Configuration
+      - KRAKEN_WEBSOCKET_ENABLED=true
+      - KRAKEN_WEBSOCKET_URL=wss://ws.kraken.com/
+      - KRAKEN_WEBSOCKET_TIMEOUT=90s
+      - KRAKEN_RECONNECT_DELAY=5s
+      - KRAKEN_MAX_RECONNECT_TRIES=5
+      
+      # Rate Limiting Configuration
+      - KRAKEN_RATE_LIMIT_ENABLED=true
+      - KRAKEN_RATE_LIMIT_CONSERVATIVE=true
+      - KRAKEN_RATE_LIMIT_CAPACITY=10
+      - KRAKEN_RATE_LIMIT_REFILL_RATE=1
+      - KRAKEN_RATE_LIMIT_REFILL_PERIOD=2s
+      
+      # Application Configuration
+      - LOG_LEVEL=info
+      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,BTC/CAD,ETH/USD,ETH/EUR,LTC/USD,LTC/EUR
+      
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - btc-ltp-network
+
+networks:
+  btc-ltp-network:
+    driver: bridge

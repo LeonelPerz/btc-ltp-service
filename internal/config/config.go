@@ -31,13 +31,23 @@ type CacheConfig struct {
 
 // KrakenConfig holds Kraken API-related configuration
 type KrakenConfig struct {
-	Timeout           time.Duration `mapstructure:"timeout"`
-	BaseURL           string        `mapstructure:"base_url"`
-	WebSocketEnabled  bool          `mapstructure:"websocket_enabled"`
-	WebSocketURL      string        `mapstructure:"websocket_url"`
-	WebSocketTimeout  time.Duration `mapstructure:"websocket_timeout"`
-	ReconnectDelay    time.Duration `mapstructure:"reconnect_delay"`
-	MaxReconnectTries int           `mapstructure:"max_reconnect_tries"`
+	Timeout           time.Duration   `mapstructure:"timeout"`
+	BaseURL           string          `mapstructure:"base_url"`
+	WebSocketEnabled  bool            `mapstructure:"websocket_enabled"`
+	WebSocketURL      string          `mapstructure:"websocket_url"`
+	WebSocketTimeout  time.Duration   `mapstructure:"websocket_timeout"`
+	ReconnectDelay    time.Duration   `mapstructure:"reconnect_delay"`
+	MaxReconnectTries int             `mapstructure:"max_reconnect_tries"`
+	RateLimit         RateLimitConfig `mapstructure:"rate_limit"`
+}
+
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	Enabled      bool          `mapstructure:"enabled"`
+	Conservative bool          `mapstructure:"conservative"`
+	Capacity     int64         `mapstructure:"capacity"`
+	RefillRate   int64         `mapstructure:"refill_rate"`
+	RefillPeriod time.Duration `mapstructure:"refill_period"`
 }
 
 // RedisConfig holds Redis-related configuration
@@ -63,12 +73,19 @@ func Load() (*Config, error) {
 	viper.SetDefault("cache.refresh_interval", "30s")
 
 	viper.SetDefault("kraken.timeout", "10s")
-	viper.SetDefault("kraken.base_url", "https://api.kraken.com/0/public")
+	viper.SetDefault("kraken.base_url", "https://api.kraken.com")
 	viper.SetDefault("kraken.websocket_enabled", true)
 	viper.SetDefault("kraken.websocket_url", "wss://ws.kraken.com/")
 	viper.SetDefault("kraken.websocket_timeout", "90s") // Further increased for network issues
 	viper.SetDefault("kraken.reconnect_delay", "5s")
 	viper.SetDefault("kraken.max_reconnect_tries", 5)
+
+	// Rate limiting configuration
+	viper.SetDefault("kraken.rate_limit.enabled", true)
+	viper.SetDefault("kraken.rate_limit.conservative", true)
+	viper.SetDefault("kraken.rate_limit.capacity", 10)        // Burst capacity
+	viper.SetDefault("kraken.rate_limit.refill_rate", 1)      // Tokens per refill period
+	viper.SetDefault("kraken.rate_limit.refill_period", "2s") // Conservative: 1 token every 2 seconds
 
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
@@ -88,6 +105,13 @@ func Load() (*Config, error) {
 	viper.BindEnv("kraken.websocket_timeout", "KRAKEN_WEBSOCKET_TIMEOUT")
 	viper.BindEnv("kraken.reconnect_delay", "KRAKEN_RECONNECT_DELAY")
 	viper.BindEnv("kraken.max_reconnect_tries", "KRAKEN_MAX_RECONNECT_TRIES")
+
+	// Rate limiting environment bindings
+	viper.BindEnv("kraken.rate_limit.enabled", "KRAKEN_RATE_LIMIT_ENABLED")
+	viper.BindEnv("kraken.rate_limit.conservative", "KRAKEN_RATE_LIMIT_CONSERVATIVE")
+	viper.BindEnv("kraken.rate_limit.capacity", "KRAKEN_RATE_LIMIT_CAPACITY")
+	viper.BindEnv("kraken.rate_limit.refill_rate", "KRAKEN_RATE_LIMIT_REFILL_RATE")
+	viper.BindEnv("kraken.rate_limit.refill_period", "KRAKEN_RATE_LIMIT_REFILL_PERIOD")
 	viper.BindEnv("redis.addr", "REDIS_ADDR")
 	viper.BindEnv("redis.password", "REDIS_PASSWORD")
 	viper.BindEnv("redis.db", "REDIS_DB")

@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose para BTC LTP Service completo (con Redis)
 
 services:
   btc-ltp-service:
@@ -9,19 +9,44 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Server Configuration
       - PORT=8080
-      - CACHE_BACKEND=memory  #redis|memory
+      
+      # Cache Configuration
+      - CACHE_BACKEND=redis  # redis|memory
       - CACHE_TTL=1m
       - CACHE_REFRESH_INTERVAL=30s
+      
+      # Kraken API Configuration
       - KRAKEN_TIMEOUT=10s
+      - KRAKEN_BASE_URL=https://api.kraken.com  # Base URL para PairMapper
+      
+      # WebSocket Configuration
+      - KRAKEN_WEBSOCKET_ENABLED=true
+      - KRAKEN_WEBSOCKET_URL=wss://ws.kraken.com/
+      - KRAKEN_WEBSOCKET_TIMEOUT=90s
+      - KRAKEN_RECONNECT_DELAY=5s
+      - KRAKEN_MAX_RECONNECT_TRIES=5
+      
+      # Rate Limiting Configuration
+      - KRAKEN_RATE_LIMIT_ENABLED=true
+      - KRAKEN_RATE_LIMIT_CONSERVATIVE=true
+      - KRAKEN_RATE_LIMIT_CAPACITY=10
+      - KRAKEN_RATE_LIMIT_REFILL_RATE=1
+      - KRAKEN_RATE_LIMIT_REFILL_PERIOD=2s
+      
+      # Redis Configuration
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
       - REDIS_DB=0
+      
+      # Application Configuration
       - LOG_LEVEL=info
-      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,ETH/USD,ETH/EUR,ETH/BTC,LTC/USD,LTC/EUR,LTC/BTC
-    # depends_on:   #Uncomment this if you want to use Redis
-      # redis:
-        # condition: service_healthy
+      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,BTC/CAD,ETH/USD,ETH/EUR,LTC/USD,LTC/EUR
+      
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]

@@ -10,6 +10,7 @@ import (
 	"btc-ltp-service/internal/client/kraken"
 	"btc-ltp-service/internal/metrics"
 	"btc-ltp-service/internal/model"
+	"btc-ltp-service/internal/pairs"
 )
 
 // KrakenClient defines the interface for interacting with Kraken API
@@ -26,13 +27,15 @@ type KrakenClient interface {
 type LTPService struct {
 	krakenClient KrakenClient
 	priceCache   cache.Cache
+	pairMapper   *pairs.PairMapper
 }
 
 // NewLTPService creates a new LTP service instance
-func NewLTPService(krakenClient KrakenClient, priceCache cache.Cache) *LTPService {
+func NewLTPService(krakenClient KrakenClient, priceCache cache.Cache, pairMapper *pairs.PairMapper) *LTPService {
 	service := &LTPService{
 		krakenClient: krakenClient,
 		priceCache:   priceCache,
+		pairMapper:   pairMapper,
 	}
 	return service
 }
@@ -135,11 +138,30 @@ func (s *LTPService) fetchAndCachePrices(pairs []string) error {
 
 	// Process each pair in the response
 	for krakenPair, tickerData := range krakenResp.Result {
-		// Convert Kraken pair name to standard format
-		standardPair, exists := model.KrakenToStandardPair[krakenPair]
-		if !exists {
-			log.Printf("Warning: unknown Kraken pair %s", krakenPair)
-			continue
+		var standardPair string
+		var err error
+
+		// Try to convert using PairMapper first
+		if s.pairMapper != nil && s.pairMapper.IsInitialized() {
+			standardPair, err = s.pairMapper.ToStandardFromREST(krakenPair)
+			if err != nil {
+				log.Printf("Warning: failed to convert REST pair %s using PairMapper: %v", krakenPair, err)
+				// Fallback to legacy mapping
+				if legacyPair, exists := model.KrakenToStandardPair[krakenPair]; exists {
+					standardPair = legacyPair
+				} else {
+					log.Printf("Warning: unknown Kraken pair %s (not in PairMapper or legacy mapping)", krakenPair)
+					continue
+				}
+			}
+		} else {
+			// Use legacy mapping
+			if legacyPair, exists := model.KrakenToStandardPair[krakenPair]; exists {
+				standardPair = legacyPair
+			} else {
+				log.Printf("Warning: unknown Kraken pair %s (PairMapper not available)", krakenPair)
+				continue
+			}
 		}
 
 		// Parse the last traded price
@@ -170,23 +192,32 @@ func (s *LTPService) fetchAndCachePrices(pairs []string) error {
 }
 
 // validatePairs checks if all requested pairs are supported
+// This validates against the configured pairs (from env/config)
 func (s *LTPService) validatePairs(pairs []string) error {
 	for _, pair := range pairs {
 		if _, exists := model.SupportedPairs[pair]; !exists {
 			return fmt.Errorf("unsupported trading pair: %s", pair)
+		}
+
+		// Additionally, if PairMapper is available, validate that Kraken supports it
+		if s.pairMapper != nil && s.pairMapper.IsInitialized() {
+			if !s.pairMapper.IsSupported(pair) {
+				return fmt.Errorf("trading pair not available in Kraken: %s", pair)
+			}
 		}
 	}
 	return nil
 }
 
 // getAllSupportedPairs returns a slice of all supported trading pairs
+// This now respects the configuration and only returns pairs that are configured
 func (s *LTPService) getAllSupportedPairs() []string {
+	// Always use the configured pairs from model.SupportedPairs
+	// which are set based on the configuration
 	pairs := make([]string, 0, len(model.SupportedPairs))
 	for pair := range model.SupportedPairs {
 		pairs = append(pairs, pair)
 	}
-
-	// Sort for consistent ordering
 	sort.Strings(pairs)
 	return pairs
 }

@@ -14,6 +14,7 @@ import (
 
 	"btc-ltp-service/internal/metrics"
 	"btc-ltp-service/internal/model"
+	"btc-ltp-service/internal/ratelimit"
 )
 
 const (
@@ -26,24 +27,60 @@ const (
 
 // Client represents a Kraken API client
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	timeout    time.Duration
+	httpClient  *http.Client
+	baseURL     string
+	timeout     time.Duration
+	rateLimiter *ratelimit.KrakenRateLimiter
 }
 
-// NewClient creates a new Kraken API client with default timeout
+// NewClient creates a new Kraken API client with default timeout and conservative rate limiting
 func NewClient() *Client {
 	return NewClientWithTimeout(DefaultTimeout)
 }
 
-// NewClientWithTimeout creates a new Kraken API client with custom timeout
+// NewClientWithTimeout creates a new Kraken API client with custom timeout and conservative rate limiting
 func NewClientWithTimeout(timeout time.Duration) *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		baseURL: KrakenAPIBaseURL,
-		timeout: timeout,
+		baseURL:     KrakenAPIBaseURL,
+		timeout:     timeout,
+		rateLimiter: ratelimit.NewConservativeKrakenRateLimiter(),
+	}
+}
+
+// NewClientWithRateLimit creates a new Kraken API client with custom rate limiting configuration
+func NewClientWithRateLimit(timeout time.Duration, conservative bool) *Client {
+	var rateLimiter *ratelimit.KrakenRateLimiter
+	if conservative {
+		rateLimiter = ratelimit.NewConservativeKrakenRateLimiter()
+	} else {
+		rateLimiter = ratelimit.NewDefaultKrakenRateLimiter()
+	}
+
+	return &Client{
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+		baseURL:     KrakenAPIBaseURL,
+		timeout:     timeout,
+		rateLimiter: rateLimiter,
+	}
+}
+
+// NewClientWithoutRateLimit creates a new Kraken API client without rate limiting (for testing)
+func NewClientWithoutRateLimit(timeout time.Duration) *Client {
+	rateLimiter := ratelimit.NewConservativeKrakenRateLimiter()
+	rateLimiter.Enable(false) // Deshabilitar rate limiting
+
+	return &Client{
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+		baseURL:     KrakenAPIBaseURL,
+		timeout:     timeout,
+		rateLimiter: rateLimiter,
 	}
 }
 
@@ -87,6 +124,12 @@ func (c *Client) GetTickerDataWithContext(ctx context.Context, pairs []string) (
 
 	// Retry logic with exponential backoff
 	for attempt := 0; attempt < MaxRetries; attempt++ {
+		// Apply rate limiting before making the request
+		if c.rateLimiter.IsEnabled() {
+			// Wait for rate limit permission
+			c.rateLimiter.WaitForPermission()
+		}
+
 		// Create request with context
 		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 		if err != nil {
@@ -232,4 +275,38 @@ func ParseLastTradePrice(tickerData model.KrakenTickerData) (float64, error) {
 	}
 
 	return price, nil
+}
+
+// EnableRateLimit habilita o deshabilita el rate limiting
+func (c *Client) EnableRateLimit(enabled bool) {
+	if c.rateLimiter != nil {
+		c.rateLimiter.Enable(enabled)
+	}
+}
+
+// IsRateLimitEnabled retorna si el rate limiting está habilitado
+func (c *Client) IsRateLimitEnabled() bool {
+	if c.rateLimiter == nil {
+		return false
+	}
+	return c.rateLimiter.IsEnabled()
+}
+
+// GetRateLimitStats retorna estadísticas del rate limiter
+func (c *Client) GetRateLimitStats() map[string]interface{} {
+	if c.rateLimiter == nil {
+		return map[string]interface{}{
+			"enabled": false,
+			"error":   "rate limiter not initialized",
+		}
+	}
+	return c.rateLimiter.GetStats()
+}
+
+// GetRateLimitMode retorna el modo de configuración del rate limiter
+func (c *Client) GetRateLimitMode() string {
+	if c.rateLimiter == nil {
+		return "disabled"
+	}
+	return c.rateLimiter.GetMode()
 }

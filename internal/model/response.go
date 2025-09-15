@@ -33,8 +33,8 @@ type CachedPrice struct {
 	Timestamp time.Time
 }
 
-// PairMappings maps standard pair names to Kraken pair names
-// This is a comprehensive list of available pairs that can be configured via environment variables
+// DEPRECATED: Legacy pair mappings - These are kept for backward compatibility only
+// Use the new PairMapper service for dynamic pair mapping
 var PairMappings = map[string]string{
 	// Bitcoin pairs
 	"BTC/USD": "XXBTZUSD",
@@ -60,10 +60,10 @@ var PairMappings = map[string]string{
 }
 
 // SupportedPairs will be populated dynamically based on configuration
-// This maintains backward compatibility
+// This maintains backward compatibility but is DEPRECATED
 var SupportedPairs map[string]string
 
-// KrakenToStandardPair converts Kraken pair names to standard format
+// DEPRECATED: KrakenToStandardPair - Use PairMapper service instead
 var KrakenToStandardPair = map[string]string{
 	// Bitcoin pairs
 	"XXBTZUSD": "BTC/USD",
@@ -88,8 +88,7 @@ var KrakenToStandardPair = map[string]string{
 	"XLTCXXBT": "LTC/BTC",
 }
 
-// InitializeSupportedPairs initializes the SupportedPairs map based on configuration
-// This allows dynamic configuration of supported pairs via environment variables
+// DEPRECATED: InitializeSupportedPairs - Use PairMapper service instead
 func InitializeSupportedPairs(configuredPairs []string) error {
 	if SupportedPairs == nil {
 		SupportedPairs = make(map[string]string)
@@ -106,7 +105,7 @@ func InitializeSupportedPairs(configuredPairs []string) error {
 	return nil
 }
 
-// GetAvailablePairs returns all available pairs that can be configured
+// DEPRECATED: GetAvailablePairs - Use PairMapper service instead
 func GetAvailablePairs() []string {
 	pairs := make([]string, 0, len(PairMappings))
 	for pair := range PairMappings {

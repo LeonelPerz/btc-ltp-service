@@ -13,6 +13,7 @@ import (
 	"btc-ltp-service/internal/logger"
 	"btc-ltp-service/internal/metrics"
 	"btc-ltp-service/internal/model"
+	"btc-ltp-service/internal/pairs"
 
 	"github.com/gorilla/websocket"
 )
@@ -45,10 +46,11 @@ type WebSocketClient struct {
 	pingInterval       time.Duration
 	pongTimeout        time.Duration
 	lastPong           time.Time
+	pairMapper         *pairs.PairMapper
 }
 
 // NewWebSocketClient creates a new WebSocket client
-func NewWebSocketClient(wsURL string, timeout time.Duration, maxReconnectTries int, reconnectDelay time.Duration) *WebSocketClient {
+func NewWebSocketClient(wsURL string, timeout time.Duration, maxReconnectTries int, reconnectDelay time.Duration, pairMapper *pairs.PairMapper) *WebSocketClient {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &WebSocketClient{
@@ -63,6 +65,7 @@ func NewWebSocketClient(wsURL string, timeout time.Duration, maxReconnectTries i
 		pingInterval:       45 * time.Second, // Send ping every 45 seconds (less frequent)
 		pongTimeout:        15 * time.Second, // Wait 15 seconds for pong response
 		lastPong:           time.Now(),
+		pairMapper:         pairMapper,
 	}
 }
 
@@ -166,19 +169,53 @@ func (w *WebSocketClient) Subscribe(pairs []string) error {
 		return fmt.Errorf("WebSocket not connected")
 	}
 
-	// Convert standard pair names to Kraken format
-	krakenPairs := make([]string, 0, len(pairs))
-	for _, pair := range pairs {
-		if krakenPair, exists := model.SupportedPairs[pair]; exists {
-			krakenPairs = append(krakenPairs, krakenPair)
-		} else {
-			return fmt.Errorf("unsupported pair: %s", pair)
+	// Check if PairMapper is initialized
+	if w.pairMapper == nil || !w.pairMapper.IsInitialized() {
+		// Fallback to old method for backward compatibility
+		logger.GetLogger().Warn("PairMapper not available, using legacy pair mappings")
+		krakenPairs := make([]string, 0, len(pairs))
+		for _, pair := range pairs {
+			if krakenPair, exists := model.SupportedPairs[pair]; exists {
+				krakenPairs = append(krakenPairs, krakenPair)
+			} else {
+				return fmt.Errorf("unsupported pair: %s", pair)
+			}
 		}
+
+		subscription := map[string]interface{}{
+			"event": "subscribe",
+			"pair":  krakenPairs,
+			"subscription": map[string]interface{}{
+				"name": "ticker",
+			},
+		}
+
+		if err := w.conn.WriteJSON(subscription); err != nil {
+			return fmt.Errorf("failed to send subscription message: %w", err)
+		}
+
+		w.subscriptions = pairs
+		logger.GetLogger().WithField("pairs", pairs).Info("Subscribed to ticker data (legacy mode)")
+		return nil
+	}
+
+	// Convert standard pair names to Kraken WebSocket format using PairMapper
+	wsPairs := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		wsPair, err := w.pairMapper.ToWSFormat(pair)
+		if err != nil {
+			logger.GetLogger().WithFields(map[string]interface{}{
+				"pair":  pair,
+				"error": err.Error(),
+			}).Error("Failed to convert pair to WebSocket format")
+			return fmt.Errorf("unsupported pair: %s - %w", pair, err)
+		}
+		wsPairs = append(wsPairs, wsPair)
 	}
 
 	subscription := map[string]interface{}{
 		"event": "subscribe",
-		"pair":  krakenPairs,
+		"pair":  wsPairs,
 		"subscription": map[string]interface{}{
 			"name": "ticker",
 		},
@@ -189,7 +226,10 @@ func (w *WebSocketClient) Subscribe(pairs []string) error {
 	}
 
 	w.subscriptions = pairs
-	logger.GetLogger().WithField("pairs", pairs).Info("Subscribed to ticker data")
+	logger.GetLogger().WithFields(map[string]interface{}{
+		"pairs":    pairs,
+		"ws_pairs": wsPairs,
+	}).Info("Subscribed to ticker data using PairMapper")
 
 	return nil
 }
@@ -345,11 +385,34 @@ func (w *WebSocketClient) handleStatusMessage(msg model.KrakenWSMessage) {
 
 // handleTickerData processes ticker data and extracts the last traded price
 func (w *WebSocketClient) handleTickerData(krakenPair string, tickerData map[string]interface{}) {
-	// Convert Kraken pair to standard format
-	standardPair, exists := model.KrakenToStandardPair[krakenPair]
-	if !exists {
-		logger.GetLogger().WithField("pair", krakenPair).Warn("Unknown Kraken pair received")
-		return
+	var standardPair string
+	var err error
+
+	// Try to convert using PairMapper first
+	if w.pairMapper != nil && w.pairMapper.IsInitialized() {
+		standardPair, err = w.pairMapper.ToStandardFromWS(krakenPair)
+		if err != nil {
+			logger.GetLogger().WithFields(map[string]interface{}{
+				"pair":  krakenPair,
+				"error": err.Error(),
+			}).Warn("Failed to convert WebSocket pair using PairMapper, trying legacy mapping")
+
+			// Fallback to legacy mapping
+			if legacyPair, exists := model.KrakenToStandardPair[krakenPair]; exists {
+				standardPair = legacyPair
+			} else {
+				logger.GetLogger().WithField("pair", krakenPair).Warn("Unknown Kraken pair received (not in PairMapper or legacy mapping)")
+				return
+			}
+		}
+	} else {
+		// Use legacy mapping
+		if legacyPair, exists := model.KrakenToStandardPair[krakenPair]; exists {
+			standardPair = legacyPair
+		} else {
+			logger.GetLogger().WithField("pair", krakenPair).Warn("Unknown Kraken pair received (PairMapper not available)")
+			return
+		}
 	}
 
 	// Extract last trade closed price
@@ -385,8 +448,9 @@ func (w *WebSocketClient) handleTickerData(krakenPair string, tickerData map[str
 	}
 
 	logger.GetLogger().WithFields(map[string]interface{}{
-		"pair":  standardPair,
-		"price": price,
+		"pair":    standardPair,
+		"ws_pair": krakenPair,
+		"price":   price,
 	}).Debug("WebSocket price update")
 
 	// Update metrics
