@@ -9,9 +9,6 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Server Configuration
-      - PORT=8080
-      
       # Cache Configuration
       - CACHE_BACKEND=redis  # redis|memory
       - CACHE_TTL=1m
@@ -42,7 +39,7 @@ services:
       
       # Application Configuration
       - LOG_LEVEL=info
-      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,BTC/CAD,ETH/USD,ETH/EUR,LTC/USD,LTC/EUR
+      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,BTC/CAD,ETH/USD,ETH/EUR,LTC/USD,LTC/EUR,ETH/AUD
       
     depends_on:
       redis:
