@@ -380,7 +380,6 @@ func (k *WebSocketClient) readMessages() {
 	for {
 		select {
 		case <-k.ctx.Done():
-			k.wg.Done()
 			return
 		default:
 			_, messageBytes, err := k.conn.ReadMessage()
