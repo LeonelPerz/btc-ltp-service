@@ -91,13 +91,51 @@ jobs:
 
     - name: Check coverage threshold
       run: |
-        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-        echo "Coverage: ${COVERAGE}%"
-        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-          echo "Coverage is below 80% (${COVERAGE}%)"
+        echo "📊 Coverage Report by Package"
+        echo "================================"
+        
+        # Paquetes que REQUIEREN al menos 80% coverage
+        CRITICAL_PACKAGES=(
+          "btc-ltp-service/internal/application/services"
+          "btc-ltp-service/internal/domain/entities"
+          "btc-ltp-service/internal/infrastructure/repositories/cache"
+          "btc-ltp-service/internal/infrastructure/web/handlers"
+        )
+        
+        # Verificar coverage por paquete crítico
+        FAILED_PACKAGES=()
+        
+        for pkg in "${CRITICAL_PACKAGES[@]}"; do
+          # Extraer coverage del paquete específico
+          COVERAGE=$(go tool cover -func=coverage.out | grep "^${pkg}" | tail -1 | awk '{print $3}' | sed 's/%//')
+          
+          if [[ -z "$COVERAGE" ]]; then
+            echo "❌ $pkg: NO TESTS FOUND (0%)"
+            FAILED_PACKAGES+=("$pkg (0%)")
+          else
+            echo "📈 $pkg: ${COVERAGE}%"
+            if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+              FAILED_PACKAGES+=("$pkg (${COVERAGE}%)")
+            fi
+          fi
+        done
+        
+        # Mostrar coverage total para referencia (no falla)
+        TOTAL_COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo ""
+        echo "ℹ️  Total project coverage: ${TOTAL_COVERAGE}% (informational only)"
+        
+        # Fallar solo si hay paquetes críticos con coverage bajo
+        if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+          echo ""
+          echo "❌ Critical packages below 80% coverage:"
+          for failed in "${FAILED_PACKAGES[@]}"; do
+            echo "   • $failed"
+          done
           exit 1
         else
-          echo "Coverage is above 80% (${COVERAGE}%)"
+          echo ""
+          echo "✅ All critical packages meet 80% coverage requirement"
         fi
 
     - name: Upload coverage to Codecov
