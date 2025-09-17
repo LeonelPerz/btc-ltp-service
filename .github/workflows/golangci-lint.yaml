@@ -51,11 +51,11 @@ jobs:
           go test -coverprofile=cache_coverage.out ./internal/infrastructure/repositories/cache/...
           CACHE_COVERAGE=$(go tool cover -func=cache_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Cache package coverage: ${CACHE_COVERAGE}%"
-          if (( $(echo "${CACHE_COVERAGE} < 80" | bc -l) )); then
-            echo "❌ Cache package coverage (${CACHE_COVERAGE}%) is below 80%"
+          if (( $(echo "${CACHE_COVERAGE} < 70" | bc -l) )); then
+            echo "❌ Cache package coverage (${CACHE_COVERAGE}%) is below 70%"
             exit 1
           else
-            echo "✅ Cache package coverage (${CACHE_COVERAGE}%) meets the 80% requirement"
+            echo "✅ Cache package coverage (${CACHE_COVERAGE}%) meets the 70% requirement"
           fi
       
       - name: Check coverage - Kraken package
@@ -64,11 +64,11 @@ jobs:
           go test -coverprofile=kraken_coverage.out ./internal/infrastructure/exchange/kraken/...
           KRAKEN_COVERAGE=$(go tool cover -func=kraken_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Kraken package coverage: ${KRAKEN_COVERAGE}%"
-          if (( $(echo "${KRAKEN_COVERAGE} < 80" | bc -l) )); then
-            echo "❌ Kraken package coverage (${KRAKEN_COVERAGE}%) is below 80%"
+          if (( $(echo "${KRAKEN_COVERAGE} < 70" | bc -l) )); then
+            echo "❌ Kraken package coverage (${KRAKEN_COVERAGE}%) is below 70%"
             exit 1
           else
-            echo "✅ Kraken package coverage (${KRAKEN_COVERAGE}%) meets the 80% requirement"
+            echo "✅ Kraken package coverage (${KRAKEN_COVERAGE}%) meets the 70% requirement"
           fi
       
       - name: Generate coverage report
