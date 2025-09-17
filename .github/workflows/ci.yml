@@ -97,7 +97,7 @@ jobs:
         # Critical packages that REQUIRE 80% coverage
         CRITICAL_PACKAGES=(
           "internal/infrastructure/repositories/cache"
-          "internal/infrastructure/exchange"
+          "internal/infrastructure/exchange/kraken"
         )
         
         FAILED_PACKAGES=()
