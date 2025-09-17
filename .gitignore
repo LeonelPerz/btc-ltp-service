@@ -59,6 +59,11 @@ pids
 coverage.txt
 coverage.out
 
+# Artefactos de benchmarking y reportes
+cache_coverage.out
+benchmarks/results/
+reports/
+
 # Temporary files
 tmp/
 temp/

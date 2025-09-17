@@ -94,10 +94,10 @@ jobs:
         COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         echo "Coverage: ${COVERAGE}%"
         if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-          echo "❌ Coverage is below 80% (${COVERAGE}%)"
+          echo "Coverage is below 80% (${COVERAGE}%)"
           exit 1
         else
-          echo "✅ Coverage is above 80% (${COVERAGE}%)"
+          echo "Coverage is above 80% (${COVERAGE}%)"
         fi
 
     - name: Upload coverage to Codecov

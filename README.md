@@ -15,7 +15,7 @@
 - 🚀 **Real-time Price Feeds** - WebSocket primary, REST API fallback
 - 📊 **Multiple Currency Pairs** - BTC/USD, BTC/EUR, BTC/CHF, ETH/USD, and more
 - ⚡ **Dual Cache Backend** - Memory or Redis with configurable TTL
-- 📈 **Prometheus Metrics** - 50+ metrics for comprehensive monitoring
+- 📈 **Prometheus Metrics** - 30+ metrics for comprehensive monitoring
 - 🛡️ **Rate Limiting** - Token bucket algorithm with IP-based throttling
 - 📝 **Structured Logging** - JSON format with request tracing
 - 🐳 **Docker Ready** - Multi-stage builds with security hardening
@@ -54,7 +54,7 @@
 
 ```bash
 # 1. Clone the repository
-git clone <repository-url>
+git clone https://github.com/LeonelPerz/btc-ltp-service
 cd btc-ltp-service
 
 # 2. Start the service stack
@@ -320,7 +320,7 @@ The service supports the following cryptocurrency pairs by default:
 | **KRAKEN API** | | |
 | `KRAKEN_TIMEOUT` | `10s` | HTTP client timeout |
 | `KRAKEN_REQUEST_TIMEOUT` | `3s` | Per-request timeout |
-| `KRAKEN_FALLBACK_TIMEOUT` | `5s` | WebSocket timeout |
+| `KRAKEN_FALLBACK_TIMEOUT` | `15s` | WebSocket timeout |
 | `KRAKEN_MAX_RETRIES` | `3` | Retry attempts |
 
 ### Configuration Files
@@ -340,7 +340,7 @@ The service uses a hierarchical configuration system:
 
 ### Prometheus Metrics
 
-The service exposes 50+ metrics across different categories:
+The service exposes 30+ metrics across different categories:
 
 #### HTTP Metrics
 - `btc_ltp_http_requests_total` - Total HTTP requests by method/path/status
@@ -349,7 +349,7 @@ The service exposes 50+ metrics across different categories:
 - `btc_ltp_http_response_size_bytes` - Response size histogram
 
 #### Cache Metrics
-- `btc_ltp_cache_operations_total` - Cache operations (hit/miss/error)
+- `btc_ltp_cache_operations_total` - Cache operations counter (hit/miss/error)
 - `btc_ltp_cache_keys` - Number of keys in cache
 - `btc_ltp_cache_hits_total` - Cache hits counter
 - `btc_ltp_cache_misses_total` - Cache misses counter
@@ -542,14 +542,6 @@ btc-ltp-service/
 └── docker-compose.yml          # Development stack
 ```
 
-### Design Principles
-
-- **Clean Architecture**: Clear separation of concerns
-- **Domain-Driven Design**: Business logic in domain layer
-- **Dependency Injection**: Loose coupling between layers
-- **Interface Segregation**: Small, focused interfaces
-- **Single Responsibility**: Each component has one reason to change
-
 ---
 
 ## 📋 Error Codes
@@ -566,24 +558,6 @@ btc-ltp-service/
 
 ---
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow Go best practices and conventions
-- Add tests for new functionality
-- Update documentation for API changes
-- Run linters and formatters before committing
-- Keep commits atomic and descriptive
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -597,44 +571,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Kraken API Documentation](https://docs.kraken.com/rest/)
 - [Go Documentation](https://golang.org/doc/)
 
----
 
-## ✅ Implementation Status
-
-### Core Requirements ✅
-- [x] REST API `/api/v1/ltp` endpoint
-- [x] Correct JSON response format
-- [x] Support for BTC/USD, BTC/CHF, BTC/EUR pairs
-- [x] Single and multiple pair requests
-- [x] Real-time data accuracy
-- [x] Public repository
-- [x] Complete documentation
-- [x] Docker containerization
-- [x] Kraken API integration
-
-### Advanced Features ✅  
-- [x] Redis cache adapter
-- [x] Configurable parameters
-- [x] Context & retry logic
-- [x] Prometheus metrics (50+ metrics)
-- [x] Structured logging
-- [x] Graceful shutdown
-- [x] Rate limiting
-- [x] Docker hardening
-- [x] WebSocket support with fallback
-- [x] Multi-currency configuration
-- [x] OpenAPI/Swagger documentation
-
-### Partially Implemented ⚠️
-- [⚠️] Test coverage (basic tests only, needs improvement)
-
-### Future Enhancements 🔮
-- [ ] GitHub Actions CI/CD pipeline
-- [ ] Distributed tracing (Jaeger/Zipkin)
-- [ ] Circuit breaker pattern
-- [ ] Admin dashboard UI
-- [ ] Notification system for alerts
-
----
-
-*Built with ❤️ using Go 1.24+ and enterprise-grade practices*
