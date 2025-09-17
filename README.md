@@ -412,6 +412,7 @@ BASE_URL=http://localhost:8080 k6 run benchmarks/k6/load_test.js
 # Stress testing
 BASE_URL=http://localhost:8080 k6 run benchmarks/k6/stress_test.js
 ```
+[`benchmarks/benchmark-analysis.md`](benchmarks/benchmark-analysis.md). 
 
 ### Expected Performance
 
