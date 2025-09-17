@@ -571,5 +571,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Prometheus Metrics](http://localhost:8080/metrics) (when running)
 - [Kraken API Documentation](https://docs.kraken.com/rest/)
 - [Go Documentation](https://golang.org/doc/)
-----
+------
 
