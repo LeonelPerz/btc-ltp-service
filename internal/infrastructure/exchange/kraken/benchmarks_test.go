@@ -253,7 +253,7 @@ func BenchmarkCacheOperations_Set(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		cache.Set(ctx, price)
+		_ = cache.Set(ctx, price)
 	}
 }
 
@@ -262,7 +262,7 @@ func BenchmarkCacheOperations_Get(b *testing.B) {
 
 	price := entities.NewPrice("BTC/USD", 50000.0, time.Now(), 0)
 	ctx := context.Background()
-	cache.Set(ctx, price)
+	_ = cache.Set(ctx, price)
 
 	b.ResetTimer()
 	b.ReportAllocs()

@@ -273,7 +273,7 @@ func TestIntegration_CacheEviction(t *testing.T) {
 
 	// Create a simple price and cache it
 	price := entities.NewPrice("BTC/USD", 50000.0, time.Now(), 0)
-	cache.Set(context.Background(), price)
+	_ = cache.Set(context.Background(), price)
 
 	// Verify it's in cache
 	cachedPrice, found := cache.Get(context.Background(), "BTC/USD")

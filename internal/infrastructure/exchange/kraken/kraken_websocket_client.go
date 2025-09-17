@@ -180,9 +180,9 @@ func (k *WebSocketClient) Connect() error {
 	k.isConnected = true
 
 	// Configurar timeouts
-	k.conn.SetReadDeadline(time.Now().Add(PongWait))
+	_ = k.conn.SetReadDeadline(time.Now().Add(PongWait))
 	k.conn.SetPongHandler(func(string) error {
-		k.conn.SetReadDeadline(time.Now().Add(PongWait))
+		_ = k.conn.SetReadDeadline(time.Now().Add(PongWait))
 		return nil
 	})
 
@@ -200,12 +200,13 @@ func (k *WebSocketClient) Connect() error {
 // Close cierra la conexión WebSocket
 func (k *WebSocketClient) Close() error {
 	k.mu.Lock()
-	defer k.mu.Unlock()
 
 	if !k.isConnected && !k.isReconnecting {
+		k.mu.Unlock()
 		return nil
 	}
 
+	// Actualizar flags y detener temporizadores bajo el lock
 	k.cancel()
 	k.isConnected = false
 	k.isReconnecting = false
@@ -216,23 +217,32 @@ func (k *WebSocketClient) Close() error {
 		k.reconnectTimer = nil
 	}
 
-	// Cerrar todos los canales de precio
-	for _, ch := range k.priceChannels {
-		close(ch)
-	}
-	k.priceChannels = make(map[string]chan *entities.Price)
+	// Capturar conexión actual para cerrarla fuera del lock
+	conn := k.conn
 
-	if k.conn != nil {
-		err := k.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		k.conn.Close()
-		k.conn = nil
-		return err
+	k.mu.Unlock()
+
+	// Cerrar conexión WebSocket para interrumpir ReadMessage
+	var err error
+	if conn != nil {
+		_ = conn.SetReadDeadline(time.Now())
+		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		_ = conn.Close()
 	}
 
 	// Esperar a que goroutines terminen antes de cerrar canales
 	k.wg.Wait()
 
-	return nil
+	// Ahora es seguro cerrar canales y limpiar conexión compartida
+	k.mu.Lock()
+	k.conn = nil
+	for _, ch := range k.priceChannels {
+		close(ch)
+	}
+	k.priceChannels = make(map[string]chan *entities.Price)
+	k.mu.Unlock()
+
+	return err
 }
 
 // SubscribeTicker se suscribe al canal de ticker para los pares especificados
@@ -275,7 +285,7 @@ func (k *WebSocketClient) SubscribeTicker(pairs []string) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	k.conn.SetWriteDeadline(time.Now().Add(WriteWait))
+	_ = k.conn.SetWriteDeadline(time.Now().Add(WriteWait))
 	return k.conn.WriteJSON(subscribeMsg)
 }
 
@@ -363,7 +373,7 @@ func (k *WebSocketClient) GetTickers(ctx context.Context, pairs []string) ([]*en
 		case price := <-priceChannels[i]:
 			prices = append(prices, price)
 			if k.cache != nil {
-				k.cache.Set(ctx, price)
+				_ = k.cache.Set(ctx, price)
 			}
 		case <-ctx.Done():
 			return prices, fmt.Errorf("context canceled/timeout waiting for price updates, got %d out of %d: %w", len(prices), len(pairs), ctx.Err())
@@ -480,8 +490,18 @@ func (k *WebSocketClient) handleTickerUpdate(data []interface{}) error {
 
 	// Actualizar cache global
 	if k.cache != nil {
-		k.cache.Set(context.Background(), priceEntity)
+		_ = k.cache.Set(context.Background(), priceEntity)
 	}
+
+	// Usar defer recover para manejar el caso de canal cerrado
+	defer func() {
+		if r := recover(); r != nil {
+			// Canal cerrado, ignorar silenciosamente
+			logging.Debug(context.Background(), "Channel closed during send", logging.Fields{
+				"pair": originalPair,
+			})
+		}
+	}()
 
 	// Enviar de forma no bloqueante con acceso seguro
 	k.mu.RLock()
@@ -521,12 +541,13 @@ func (k *WebSocketClient) handleTickerUpdate(data []interface{}) error {
 func (k *WebSocketClient) handleEventMessage(msg WebSocketMessage) error {
 	switch msg.Event {
 	case "subscriptionStatus":
-		if msg.Status == "subscribed" {
+		switch msg.Status {
+		case "subscribed":
 			logging.Info(context.Background(), "Successfully subscribed to ticker for pairs", logging.Fields{
 				"pairs": msg.Pair,
 				"url":   k.url,
 			})
-		} else if msg.Status == "error" {
+		case "error":
 			return fmt.Errorf("subscription error: %s", msg.ErrorMessage)
 		}
 	case "systemStatus":
@@ -549,19 +570,16 @@ func (k *WebSocketClient) pingHandler() {
 		case <-k.ctx.Done():
 			return
 		case <-ticker.C:
-			k.mu.Lock()
-			if k.conn != nil && k.isConnected {
-				k.conn.SetWriteDeadline(time.Now().Add(WriteWait))
-				if err := k.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					logging.Warn(context.Background(), "Failed to send WebSocket ping", logging.Fields{
-						"error": err.Error(),
-						"url":   k.url,
-					})
-					k.mu.Unlock()
-					return
-				}
+			k.mu.RLock()
+			conn := k.conn
+			k.mu.RUnlock()
+			if conn == nil {
+				return
 			}
-			k.mu.Unlock()
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				k.scheduleReconnect()
+				return
+			}
 		}
 	}
 }

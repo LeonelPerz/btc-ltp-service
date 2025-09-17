@@ -17,7 +17,3 @@ func NewPrice(pair string, amount float64, timestamp time.Time, age time.Duratio
 		Age:       age,
 	}
 }
-
-func (p *Price) setAge() time.Duration {
-	return time.Since(p.Timestamp)
-}

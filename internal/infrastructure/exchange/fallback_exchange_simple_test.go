@@ -56,7 +56,9 @@ func TestFallbackExchange_GetTickers_EmptyPairs_Simple(t *testing.T) {
 	}
 
 	exchange := NewFallbackExchange(cfg, []string{})
-	defer exchange.Close()
+	defer func() {
+		_ = exchange.Close()
+	}()
 
 	// Test empty pairs
 	prices, err := exchange.GetTickers(context.TODO(), []string{})
@@ -126,7 +128,9 @@ func TestFallbackExchange_ConfigurationValues(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			exchange := NewFallbackExchange(tc.cfg, []string{})
-			defer exchange.Close()
+			defer func() {
+				_ = exchange.Close()
+			}()
 
 			retrievedConfig := exchange.GetConfig()
 			assert.Equal(t, tc.cfg.WebSocketURL, retrievedConfig.WebSocketURL)

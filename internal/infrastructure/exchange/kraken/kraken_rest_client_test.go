@@ -41,7 +41,7 @@ func createMockServer(statusCode int, response interface{}) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		if response != nil {
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response)
 		}
 	}))
 }
@@ -202,7 +202,7 @@ func TestRestClient_GetTicker_InvalidJSONResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
@@ -413,7 +413,7 @@ func TestRestClient_GetTicker_ContextCanceled(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
+		_ = json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
 	}))
 	defer server.Close()
 
@@ -436,7 +436,7 @@ func TestRestClient_GetTicker_ContextTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
+		_ = json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
 	}))
 	defer server.Close()
 
@@ -459,7 +459,7 @@ func TestRestClient_GetTickers_ContextTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(KrakenTickerResponse{
+		_ = json.NewEncoder(w).Encode(KrakenTickerResponse{
 			Error: []string{},
 			Result: map[string]KrakenTickerData{
 				"XXBTZUSD": {LastTradeClosed: []string{"50000.0", "1.0"}},
@@ -493,7 +493,7 @@ func TestRestClient_GetTicker_RetrySuccess(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
+		_ = json.NewEncoder(w).Encode(createMockKrakenResponse("XXBTZUSD", "50000.0"))
 	}))
 	defer server.Close()
 

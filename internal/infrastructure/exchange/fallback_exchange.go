@@ -372,7 +372,8 @@ func (f *FallbackExchange) startStalenessWatcher(pairs []string, maxAge time.Dur
 			}
 			cancel()
 		default:
-			// continue loop
+			// Add small delay to prevent busy waiting
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

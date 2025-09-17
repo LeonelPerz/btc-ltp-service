@@ -93,7 +93,7 @@ func (l *Loader) bindEnvVars() {
 	}
 
 	for configKey, envVar := range envMappings {
-		l.v.BindEnv(configKey, envVar)
+		_ = l.v.BindEnv(configKey, envVar)
 	}
 }
 

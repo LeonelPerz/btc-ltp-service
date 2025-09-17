@@ -87,7 +87,7 @@ func TestIntegration_PriceAdapterWithMemoryCache(t *testing.T) {
 
 		// Verify order preservation
 		pairs := []string{"ETH/USD", "BTC/USD"}
-		prices, missing = adapter.GetMany(ctx, pairs)
+		prices, _ = adapter.GetMany(ctx, pairs)
 		assert.Len(t, prices, 2)
 		assert.Equal(t, "ETH/USD", prices[0].Pair)
 		assert.Equal(t, "BTC/USD", prices[1].Pair)

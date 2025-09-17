@@ -157,7 +157,7 @@ func (rlm *RateLimitMiddleware) writeRateLimitError(w http.ResponseWriter, r *ht
 		},
 	}
 
-	json.NewEncoder(w).Encode(errorResponse)
+	_ = json.NewEncoder(w).Encode(errorResponse)
 }
 
 // Stats returns rate limiting statistics

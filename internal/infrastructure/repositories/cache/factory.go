@@ -72,7 +72,7 @@ func (f *Factory) createRedisCache(config Config) (interfaces.Cache, error) {
 	defer cancel()
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		rdb.Close()
+		_ = rdb.Close()
 		return nil, fmt.Errorf("failed to connect to Redis at %s: %w", config.RedisURL, err)
 	}
 

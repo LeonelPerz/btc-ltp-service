@@ -1,0 +1,84 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+env:
+  GO_VERSION: 1.24.6
+  GOLANGCI_LINT_VERSION: v2.4.0
+
+jobs:
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+  test-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Run tests with race detection - Cache package
+        run: |
+          echo "Testing cache package with race detection..."
+          go test -race -v ./internal/infrastructure/repositories/cache/...
+      
+      - name: Run tests with race detection - Kraken package
+        run: |
+          echo "Testing kraken package with race detection..."
+          go test -race -v ./internal/infrastructure/exchange/kraken/...
+      
+      - name: Check coverage - Cache package
+        run: |
+          echo "Checking coverage for cache package..."
+          go test -coverprofile=cache_coverage.out ./internal/infrastructure/repositories/cache/...
+          CACHE_COVERAGE=$(go tool cover -func=cache_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Cache package coverage: ${CACHE_COVERAGE}%"
+          if (( $(echo "${CACHE_COVERAGE} < 80" | bc -l) )); then
+            echo "❌ Cache package coverage (${CACHE_COVERAGE}%) is below 80%"
+            exit 1
+          else
+            echo "✅ Cache package coverage (${CACHE_COVERAGE}%) meets the 80% requirement"
+          fi
+      
+      - name: Check coverage - Kraken package
+        run: |
+          echo "Checking coverage for kraken package..."
+          go test -coverprofile=kraken_coverage.out ./internal/infrastructure/exchange/kraken/...
+          KRAKEN_COVERAGE=$(go tool cover -func=kraken_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Kraken package coverage: ${KRAKEN_COVERAGE}%"
+          if (( $(echo "${KRAKEN_COVERAGE} < 80" | bc -l) )); then
+            echo "❌ Kraken package coverage (${KRAKEN_COVERAGE}%) is below 80%"
+            exit 1
+          else
+            echo "✅ Kraken package coverage (${KRAKEN_COVERAGE}%) meets the 80% requirement"
+          fi
+      
+      - name: Generate coverage report
+        run: |
+          echo "## Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Coverage |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|----------|" >> $GITHUB_STEP_SUMMARY
+          
+          CACHE_COVERAGE=$(go tool cover -func=cache_coverage.out | grep total | awk '{print $3}')
+          KRAKEN_COVERAGE=$(go tool cover -func=kraken_coverage.out | grep total | awk '{print $3}')
+          
+          echo "| Cache | ${CACHE_COVERAGE} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kraken | ${KRAKEN_COVERAGE} |" >> $GITHUB_STEP_SUMMARY

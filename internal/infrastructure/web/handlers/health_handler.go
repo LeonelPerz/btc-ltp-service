@@ -73,6 +73,6 @@ func (h *HealthHandler) writeJSONResponse(w http.ResponseWriter, statusCode int,
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		// If encoding fails, write basic error response
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"ENCODING_ERROR","message":"Failed to encode response"}`))
+		_, _ = w.Write([]byte(`{"error":"ENCODING_ERROR","message":"Failed to encode response"}`))
 	}
 }

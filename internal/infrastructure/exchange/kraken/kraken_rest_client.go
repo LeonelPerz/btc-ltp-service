@@ -131,7 +131,9 @@ func (k *RestClient) doTickerRequest(ctx context.Context, krakenPair, originalPa
 		}
 		return nil, fmt.Errorf("%w: %v", ErrRetryableRequest, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Check for retryable HTTP status codes
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
@@ -268,7 +270,9 @@ func (k *RestClient) doTickersRequest(ctx context.Context, krakenPairs, original
 		}
 		return nil, fmt.Errorf("%w: %v", ErrRetryableRequest, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Check for retryable HTTP status codes
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {

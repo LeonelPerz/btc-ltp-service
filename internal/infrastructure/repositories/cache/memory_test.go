@@ -174,7 +174,7 @@ func TestMemoryCache_Get(t *testing.T) {
 		{
 			name: "existing key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "existing-key", "existing-value", 5*time.Minute)
+				_ = cache.Set(context.Background(), "existing-key", "existing-value", 5*time.Minute)
 			},
 			key:       "existing-key",
 			wantValue: "existing-value",
@@ -190,7 +190,7 @@ func TestMemoryCache_Get(t *testing.T) {
 		{
 			name: "expired key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "expired-key", "expired-value", 1*time.Nanosecond)
+				_ = cache.Set(context.Background(), "expired-key", "expired-value", 1*time.Nanosecond)
 				time.Sleep(2 * time.Nanosecond) // Asegurar expiración
 			},
 			key:       "expired-key",
@@ -200,7 +200,7 @@ func TestMemoryCache_Get(t *testing.T) {
 		{
 			name: "empty key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "", "empty-key-value", 5*time.Minute)
+				_ = cache.Set(context.Background(), "", "empty-key-value", 5*time.Minute)
 			},
 			key:       "",
 			wantValue: "empty-key-value",
@@ -237,7 +237,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		{
 			name: "existing key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "key-to-delete", "value", 5*time.Minute)
+				_ = cache.Set(context.Background(), "key-to-delete", "value", 5*time.Minute)
 			},
 			key:     "key-to-delete",
 			wantErr: false,
@@ -260,7 +260,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		{
 			name: "empty key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "", "empty-key-value", 5*time.Minute)
+				_ = cache.Set(context.Background(), "", "empty-key-value", 5*time.Minute)
 			},
 			key:     "",
 			wantErr: false,
@@ -273,7 +273,7 @@ func TestMemoryCache_Delete(t *testing.T) {
 		{
 			name: "expired key",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "expired", "value", 1*time.Nanosecond)
+				_ = cache.Set(context.Background(), "expired", "value", 1*time.Nanosecond)
 				time.Sleep(2 * time.Nanosecond)
 			},
 			key:     "expired",
@@ -319,17 +319,17 @@ func TestMemoryCache_Size(t *testing.T) {
 		{
 			name: "with items",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "key1", "value1", 5*time.Minute)
-				cache.Set(context.Background(), "key2", "value2", 5*time.Minute)
-				cache.Set(context.Background(), "key3", "value3", 5*time.Minute)
+				_ = cache.Set(context.Background(), "key1", "value1", 5*time.Minute)
+				_ = cache.Set(context.Background(), "key2", "value2", 5*time.Minute)
+				_ = cache.Set(context.Background(), "key3", "value3", 5*time.Minute)
 			},
 			wantSize: 3,
 		},
 		{
 			name: "after expiration",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "key1", "value1", 5*time.Minute)
-				cache.Set(context.Background(), "key2", "value2", 1*time.Nanosecond)
+				_ = cache.Set(context.Background(), "key1", "value1", 5*time.Minute)
+				_ = cache.Set(context.Background(), "key2", "value2", 1*time.Nanosecond)
 				time.Sleep(2 * time.Nanosecond)
 			},
 			wantSize: 2, // Expired items are still counted until cleanup
@@ -361,10 +361,10 @@ func TestMemoryCache_Cleanup(t *testing.T) {
 		{
 			name: "remove expired items",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "valid1", "value1", 5*time.Minute)
-				cache.Set(context.Background(), "expired1", "value2", 1*time.Nanosecond)
-				cache.Set(context.Background(), "expired2", "value3", 1*time.Nanosecond)
-				cache.Set(context.Background(), "valid2", "value4", 5*time.Minute)
+				_ = cache.Set(context.Background(), "valid1", "value1", 5*time.Minute)
+				_ = cache.Set(context.Background(), "expired1", "value2", 1*time.Nanosecond)
+				_ = cache.Set(context.Background(), "expired2", "value3", 1*time.Nanosecond)
+				_ = cache.Set(context.Background(), "valid2", "value4", 5*time.Minute)
 				time.Sleep(2 * time.Nanosecond)
 			},
 			wantSize: 2, // Solo los válidos deben quedar
@@ -372,8 +372,8 @@ func TestMemoryCache_Cleanup(t *testing.T) {
 		{
 			name: "keep valid items",
 			setupData: func(cache *MemoryCache) {
-				cache.Set(context.Background(), "valid1", "value1", 5*time.Minute)
-				cache.Set(context.Background(), "valid2", "value2", 10*time.Minute)
+				_ = cache.Set(context.Background(), "valid1", "value1", 5*time.Minute)
+				_ = cache.Set(context.Background(), "valid2", "value2", 10*time.Minute)
 			},
 			wantSize: 2,
 		},
@@ -397,22 +397,22 @@ func TestMemoryCache_AutoCleanupOnSet(t *testing.T) {
 	ctx := context.Background()
 
 	// Agregar algunos elementos que expiran rápidamente
-	cache.Set(ctx, "expired1", "value1", 1*time.Nanosecond)
-	cache.Set(ctx, "expired2", "value2", 1*time.Nanosecond)
-	cache.Set(ctx, "valid", "value3", 5*time.Minute)
+	_ = cache.Set(ctx, "expired1", "value1", 1*time.Nanosecond)
+	_ = cache.Set(ctx, "expired2", "value2", 1*time.Nanosecond)
+	_ = cache.Set(ctx, "valid", "value3", 5*time.Minute)
 
 	// Esperar a que expiren
 	time.Sleep(2 * time.Nanosecond)
 
-	initialSize := cache.Size()
-	assert.GreaterOrEqual(t, initialSize, 3) // Al menos 3 elementos
+	initialSize := int(cache.Size())
+	assert.Equal(t, 1, initialSize)
 
 	// Set un nuevo elemento, esto debería triggerar la limpieza
-	cache.Set(ctx, "new", "new-value", 5*time.Minute)
+	_ = cache.Set(ctx, "new", "new-value", 5*time.Minute)
 
 	// Verificar que los elementos expirados fueron eliminados
-	finalSize := cache.Size()
-	assert.LessOrEqual(t, finalSize, 2) // Máximo 2 elementos ('valid' y 'new')
+	finalSize := int(cache.Size())
+	assert.Equal(t, 2, finalSize)
 }
 
 func TestMemoryCache_Expiration(t *testing.T) {
@@ -493,7 +493,7 @@ func TestMemoryCache_Concurrency(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			key := fmt.Sprintf("read-key-%d", i)
 			value := fmt.Sprintf("read-value-%d", i)
-			cache.Set(ctx, key, value, 5*time.Minute)
+			_ = cache.Set(ctx, key, value, 5*time.Minute)
 		}
 
 		var wg sync.WaitGroup
@@ -527,7 +527,7 @@ func TestMemoryCache_Concurrency(t *testing.T) {
 				defer wg.Done()
 				key := fmt.Sprintf("rw-key-%d", id%10)
 				value := fmt.Sprintf("rw-value-%d", id)
-				cache.Set(ctx, key, value, 5*time.Minute)
+				_ = cache.Set(ctx, key, value, 5*time.Minute)
 			}(i)
 
 			// Lectura
@@ -547,7 +547,7 @@ func TestMemoryCache_Concurrency(t *testing.T) {
 		for i := 0; i < 50; i++ {
 			key := fmt.Sprintf("delete-key-%d", i)
 			value := fmt.Sprintf("delete-value-%d", i)
-			cache.Set(ctx, key, value, 5*time.Minute)
+			_ = cache.Set(ctx, key, value, 5*time.Minute)
 		}
 
 		var wg sync.WaitGroup

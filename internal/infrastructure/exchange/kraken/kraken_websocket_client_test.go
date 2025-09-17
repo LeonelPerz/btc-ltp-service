@@ -18,12 +18,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Thread-safe WebSocket connection wrapper
+type safeWebSocketConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (s *safeWebSocketConn) WriteJSON(v interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteJSON(v)
+}
+
+func (s *safeWebSocketConn) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.Close()
+}
+
 // Mock WebSocket Server
 type mockWebSocketServer struct {
 	server   *httptest.Server
 	upgrader websocket.Upgrader
 	messages chan []byte
-	clients  []*websocket.Conn
+	clients  []*safeWebSocketConn
 	mu       sync.Mutex
 }
 
@@ -33,7 +51,7 @@ func newMockWebSocketServer() *mockWebSocketServer {
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 		messages: make(chan []byte, 100),
-		clients:  make([]*websocket.Conn, 0),
+		clients:  make([]*safeWebSocketConn, 0),
 	}
 
 	mws.server = httptest.NewServer(http.HandlerFunc(mws.handleWebSocket))
@@ -45,10 +63,14 @@ func (mws *mockWebSocketServer) handleWebSocket(w http.ResponseWriter, r *http.R
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
+
+	safeConn := &safeWebSocketConn{conn: conn}
 
 	mws.mu.Lock()
-	mws.clients = append(mws.clients, conn)
+	mws.clients = append(mws.clients, safeConn)
 	mws.mu.Unlock()
 
 	// Send subscription confirmation
@@ -60,7 +82,8 @@ func (mws *mockWebSocketServer) handleWebSocket(w http.ResponseWriter, r *http.R
 			"name": "ticker",
 		},
 	}
-	conn.WriteJSON(subscriptionConfirm)
+
+	_ = safeConn.WriteJSON(subscriptionConfirm)
 
 	// Listen for messages and echo them back
 	for {
@@ -85,18 +108,25 @@ func (mws *mockWebSocketServer) sendTickerUpdate(pair string, price string) {
 	}
 
 	mws.mu.Lock()
-	for _, client := range mws.clients {
-		client.WriteJSON(tickerUpdate)
-	}
+	clients := make([]*safeWebSocketConn, len(mws.clients))
+	copy(clients, mws.clients)
 	mws.mu.Unlock()
+
+	for _, client := range clients {
+		_ = client.WriteJSON(tickerUpdate)
+	}
 }
 
 func (mws *mockWebSocketServer) close() {
 	mws.mu.Lock()
-	for _, client := range mws.clients {
-		client.Close()
-	}
+	clients := make([]*safeWebSocketConn, len(mws.clients))
+	copy(clients, mws.clients)
+	mws.clients = mws.clients[:0]
 	mws.mu.Unlock()
+
+	for _, client := range clients {
+		_ = client.Close()
+	}
 	mws.server.Close()
 }
 
@@ -154,7 +184,7 @@ func TestWebSocketClient_Connect_Success(t *testing.T) {
 	assert.True(t, client.IsConnected())
 
 	// Cleanup
-	client.Close()
+	_ = client.Close()
 }
 
 func TestWebSocketClient_Close_Success(t *testing.T) {
@@ -177,7 +207,9 @@ func TestWebSocketClient_SubscribeTicker_Success(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	assert.NoError(t, err)
@@ -194,7 +226,9 @@ func TestWebSocketClient_GetTicker_Success(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	require.NoError(t, err)
@@ -222,7 +256,9 @@ func TestWebSocketClient_GetTickers_Success(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	pairs := []string{"BTC/USD", "ETH/USD"}
 	err = client.SubscribeTicker(pairs)
@@ -269,7 +305,9 @@ func TestWebSocketClient_Connect_AlreadyConnected(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	// Intentar conectar de nuevo
 	err = client.Connect()
@@ -301,7 +339,9 @@ func TestWebSocketClient_GetTicker_NotSubscribed(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -318,7 +358,9 @@ func TestWebSocketClient_GetTicker_InvalidPair(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"INVALID"})
 	assert.Error(t, err)
@@ -334,7 +376,9 @@ func TestWebSocketClient_SubscribeTicker_EmptyPairs(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{})
 	assert.NoError(t, err) // Debería manejar lista vacía sin error
@@ -354,7 +398,9 @@ func TestWebSocketClient_GetTicker_Timeout(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	require.NoError(t, err)
@@ -376,7 +422,9 @@ func TestWebSocketClient_ConcurrentSubscriptions(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	const numGoroutines = 10
 	var wg sync.WaitGroup
@@ -411,7 +459,9 @@ func TestWebSocketClient_ConcurrentGetTicker(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	require.NoError(t, err)
@@ -421,10 +471,8 @@ func TestWebSocketClient_ConcurrentGetTicker(t *testing.T) {
 		ticker := time.NewTicker(10 * time.Millisecond)
 		defer ticker.Stop()
 		for i := 0; i < 50; i++ {
-			select {
-			case <-ticker.C:
-				mockServer.sendTickerUpdate("XBT/USD", fmt.Sprintf("5000%d.0", i))
-			}
+			<-ticker.C
+			mockServer.sendTickerUpdate("XBT/USD", fmt.Sprintf("5000%d.0", i))
 		}
 	}()
 
@@ -477,7 +525,9 @@ func TestWebSocketClient_GetTicker_ContextCanceled(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	require.NoError(t, err)
@@ -497,7 +547,9 @@ func TestWebSocketClient_GetTickers_ContextTimeout(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD", "ETH/USD"})
 	require.NoError(t, err)
@@ -556,7 +608,9 @@ func TestWebSocketClient_CacheIntegration_UpdateOnTicker(t *testing.T) {
 	client := createTestWebSocketClient(mockServer.getURL())
 	err := client.Connect()
 	require.NoError(t, err)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	err = client.SubscribeTicker([]string{"BTC/USD"})
 	require.NoError(t, err)

@@ -230,13 +230,6 @@ func (s *priceService) cachePrice(ctx context.Context, price *entities.Price) er
 	return s.cache.Set(ctx, key, string(priceJSON), s.cacheTTL)
 }
 
-// cachePriceAsync caches a price asynchronously to avoid blocking
-func (s *priceService) cachePriceAsync(ctx context.Context, price *entities.Price) error {
-	// For simplicity, we do it synchronously for now
-	// In the future it can be made async with goroutine if needed
-	return s.cachePrice(ctx, price)
-}
-
 // cacheKey generates the cache key for a pair
 func (s *priceService) cacheKey(pair string) string {
 	return CacheKeyPrefix + strings.ToUpper(pair)
