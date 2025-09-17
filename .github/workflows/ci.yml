@@ -94,7 +94,7 @@ jobs:
         echo "📊 Checking coverage for critical packages (minimum 80% each)"
         echo "============================================================"
         
-        # Paquetes críticos que REQUIEREN 80% coverage
+        # Critical packages that REQUIRE 80% coverage
         CRITICAL_PACKAGES=(
           "internal/infrastructure/repositories/cache"
           "internal/infrastructure/exchange"
@@ -106,39 +106,39 @@ jobs:
           echo ""
           echo "🔍 Testing package: $pkg_path"
           
-          # Ejecutar tests con coverage para el paquete específico
+          # Run tests with coverage for the specific package
           if go test -cover "./$pkg_path/..." 2>/dev/null | grep -q "coverage:"; then
             COVERAGE=$(go test -cover "./$pkg_path/..." 2>/dev/null | grep "coverage:" | tail -1 | awk '{print $2}' | sed 's/%//')
-            echo "✅ Coverage: ${COVERAGE}%"
+            echo "Coverage: ${COVERAGE}%"
             
             if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-              echo "❌ FAIL: Coverage below 80% threshold"
+              echo "FAIL: Coverage below 80% threshold"
               FAILED_PACKAGES+=("$pkg_path (${COVERAGE}%)")
             else
-              echo "✅ PASS: Coverage meets 80% threshold"
+              echo "PASS: Coverage meets 80% threshold"
             fi
           else
-            echo "❌ FAIL: No tests found or tests failed"
+            echo "FAIL: No tests found or tests failed"
             FAILED_PACKAGES+=("$pkg_path (no tests)")
           fi
         done
         
-        # Mostrar coverage total para información
+        # Show total coverage for informational purposes
         TOTAL_COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
         echo ""
         echo "ℹ️  Total project coverage: ${TOTAL_COVERAGE}% (informational only)"
         
-        # Fallar solo si hay paquetes críticos con coverage bajo
+        # Fail only if there are critical packages with low coverage
         if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
           echo ""
-          echo "❌ The following critical packages failed the 80% coverage requirement:"
+          echo "The following critical packages failed the 80% coverage requirement:"
           for failed in "${FAILED_PACKAGES[@]}"; do
             echo "   • $failed"
           done
           exit 1
         else
           echo ""
-          echo "✅ All critical packages meet the 80% coverage requirement!"
+          echo "All critical packages meet the 80% coverage requirement!"
         fi
 
     - name: Upload coverage to Codecov
