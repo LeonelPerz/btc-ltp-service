@@ -5,9 +5,10 @@ type Pair struct {
 	Price  Price  `json:"price"`
 }
 
-func NewPair(symbol string) *Pair {
+func NewPair(symbol string, price Price) *Pair {
 
 	return &Pair{
 		Symbol: symbol,
+		Price:  price,
 	}
 }

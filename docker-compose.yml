@@ -1,52 +1,55 @@
-# Docker Compose para BTC LTP Service completo (con Redis)
-
 services:
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: btc-ltp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-""}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - btc-ltp-network
+
+  # BTC LTP Service (Main Application)
   btc-ltp-service:
-    build:
+    build: 
       context: .
       dockerfile: Dockerfile
     container_name: btc-ltp-service
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      # Cache Configuration
-      - CACHE_BACKEND=redis  # redis|memory
-      - CACHE_TTL=1m
-      - CACHE_REFRESH_INTERVAL=30s
-      
-      # Kraken API Configuration
-      - KRAKEN_TIMEOUT=10s
-      - KRAKEN_BASE_URL=https://api.kraken.com  # Base URL para PairMapper
-      
-      # WebSocket Configuration
-      - KRAKEN_WEBSOCKET_ENABLED=true
-      - KRAKEN_WEBSOCKET_URL=wss://ws.kraken.com/
-      - KRAKEN_WEBSOCKET_TIMEOUT=90s
-      - KRAKEN_RECONNECT_DELAY=5s
-      - KRAKEN_MAX_RECONNECT_TRIES=5
-      
-      # Rate Limiting Configuration
-      - KRAKEN_RATE_LIMIT_ENABLED=true
-      - KRAKEN_RATE_LIMIT_CONSERVATIVE=true
-      - KRAKEN_RATE_LIMIT_CAPACITY=10
-      - KRAKEN_RATE_LIMIT_REFILL_RATE=1
-      - KRAKEN_RATE_LIMIT_REFILL_PERIOD=2s
-      
-      # Redis Configuration
+      - PORT=8080
+      - MOCK_MODE=false
+      - DEV_MODE=false
+      - CACHE_BACKEND=memory
       - REDIS_ADDR=redis:6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-""}
       - REDIS_DB=0
-      
-      # Application Configuration
-      - LOG_LEVEL=info
-      - SUPPORTED_PAIRS=BTC/USD,BTC/EUR,BTC/CAD,ETH/USD,ETH/EUR,LTC/USD,LTC/EUR,ETH/AUD
-      
+      - CACHE_TTL=60s
+      - SUPPORTED_PAIRS=BTC/USD,ETH/USD,LTC/USD,XRP/USD,BTC/EUR,ETH/EUR
+      # Timeouts más largos para APIs externas reales
+      - KRAKEN_TIMEOUT=30s
+      - KRAKEN_REQUEST_TIMEOUT=15s
+      - KRAKEN_FALLBACK_TIMEOUT=20s
+      # 🆕 Configuración del nuevo sistema de logging
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=text
+      - LOG_ADD_SOURCE=false
+      - ENVIRONMENT=production
     depends_on:
       redis:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,23 +57,22 @@ services:
     networks:
       - btc-ltp-network
 
-  redis:
-    image: redis:7-alpine
-    container_name: btc-ltp-redis
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
+  # Optional: Redis Commander for GUI management  
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: btc-ltp-redis-commander
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-""}
+    depends_on:
+      - redis
     networks:
       - btc-ltp-network
+    profiles:
+      - tools
 
 volumes:
   redis_data:

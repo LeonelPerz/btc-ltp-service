@@ -1,0 +1,93 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+    - gocritic
+    - gocyclo
+    - prealloc
+    - nolintlint
+    - goconst
+    - bodyclose
+    - contextcheck
+    - durationcheck
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(btc-ltp-service)
+    skip-generated: true
+  
+  gocyclo:
+    min-complexity: 15
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+        arguments:
+          - "disableStutteringCheck"
+
+  gosec:
+    excludes:
+      - G204 # Subprocess launched with variable
+      - G304 # File path provided as taint input
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gosec
+        - gocritic
+        - revive
+        - unparam
+    
+    # Exclude mock files
+    - path: mock_.*\.go
+      linters:
+        - revive
+        - unused
+    
+    # Exclude generated files
+    - path: ".*\\.pb\\.go"
+      linters:
+        - revive
+        - unused
+        - gocritic
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -13,7 +13,7 @@ func NewPrice(pair string, amount float64, timestamp time.Time, age time.Duratio
 	return &Price{
 		Pair:      pair,
 		Amount:    amount,
-		Timestamp: timestamp,
+		Timestamp: time.Now(),
 		Age:       age,
 	}
 }
