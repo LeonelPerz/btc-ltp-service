@@ -1,41 +1,41 @@
-# Configuración Base - Demostración de Precedencia
-# Esta configuración se sobrescribe con ENV vars para demostrar precedencia
+# Base Configuration - Precedence Demonstration
+# This configuration is overridden by ENV vars to demonstrate precedence
 
-# PRECEDENCIA: defaults → config.yaml → config.{env}.yaml → ENV vars
+# PRECEDENCE: defaults → config.yaml → config.{env}.yaml → ENV vars
 
 server:
-  port: 9000              # Será sobrescrito por ENV: PORT=8080
-  shutdown_timeout: 45s   # Será sobrescrito por ENV o permanecerá
+  port: 9000              # Will be overridden by ENV: PORT=8080
+  shutdown_timeout: 45s   # Will be overridden by ENV or remain
 
 cache:
-  backend: redis          # Será sobrescrito por ENV: CACHE_BACKEND=memory  
-  ttl: 60s               # Será sobrescrito por ENV: CACHE_TTL=30s
+  backend: redis          # Will be overridden by ENV: CACHE_BACKEND=memory  
+  ttl: 60s               # Will be overridden by ENV: CACHE_TTL=30s
   redis:
-    addr: redis:6379     # Será sobrescrito por ENV: REDIS_ADDR=localhost:6379
-    password: "secret"   # ENV puede sobrescribir con REDIS_PASSWORD=""
-    db: 1               # Será sobrescrito por ENV: REDIS_DB=0
+    addr: redis:6379     # Will be overridden by ENV: REDIS_ADDR=localhost:6379
+    password: "secret"   # ENV can override with REDIS_PASSWORD=""
+    db: 1               # Will be overridden by ENV: REDIS_DB=0
 
 exchange:
   kraken:
     rest_url: https://api.kraken.com/0/public
     websocket_url: wss://ws.kraken.com
-    timeout: 15s         # Diferente del default
-    request_timeout: 5s  # Diferente del default
+    timeout: 15s         # Different from default
+    request_timeout: 5s  # Different from default
     fallback_timeout: 8s 
-    max_retries: 2       # Diferente del default
+    max_retries: 2       # Different from default
 
 rate_limit:
-  enabled: false         # Será sobrescrito por ENV: RATE_LIMIT_ENABLED=true
-  capacity: 50          # Será sobrescrito por ENV: RATE_LIMIT_CAPACITY=100
-  refill_rate: 5        # Será sobrescrito por ENV: RATE_LIMIT_REFILL_RATE=10
+  enabled: false         # Will be overridden by ENV: RATE_LIMIT_ENABLED=true
+  capacity: 50          # Will be overridden by ENV: RATE_LIMIT_CAPACITY=100
+  refill_rate: 5        # Will be overridden by ENV: RATE_LIMIT_REFILL_RATE=10
 
 logging:
-  level: debug          # Será sobrescrito por ENV: LOG_LEVEL=info
-  format: text          # Será sobrescrito por ENV: LOG_FORMAT=json
+  level: debug          # Will be overridden by ENV: LOG_LEVEL=info
+  format: text          # Will be overridden by ENV: LOG_FORMAT=json
 
 business:
-  supported_pairs:      # Será sobrescrito por ENV: SUPPORTED_PAIRS="BTC/USD,ETH/USD"
+  supported_pairs:      # Will be overridden by ENV: SUPPORTED_PAIRS="BTC/USD,ETH/USD"
     - "BTC/EUR"
     - "ETH/EUR"  
     - "LTC/EUR"
-  cache_prefix: "demo:" # Diferente del default
+  cache_prefix: "demo:" # Different from default
