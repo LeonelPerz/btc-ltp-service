@@ -1,0 +1,48 @@
+# Configuración de Producción
+# Sobrescribe valores específicos para producción
+
+# Servidor con configuración de producción
+server:
+  port: 8080
+  shutdown_timeout: 60s  # Más tiempo para conexiones en prod
+
+# Cache optimizado para producción
+cache:
+  backend: redis
+  ttl: 300s             # 5 minutos para producción
+  redis:
+    addr: redis-cluster:6379
+    password: ""        # Set via ENV: REDIS_PASSWORD
+    db: 0
+
+# Exchange con timeouts de producción
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    websocket_url: wss://ws.kraken.com
+    timeout: 30s        # Timeouts más largos en prod
+    request_timeout: 10s
+    fallback_timeout: 20s
+    max_retries: 5      # Más reintentos en prod
+
+# Rate limiting más estricto en producción
+rate_limit:
+  enabled: true
+  capacity: 200
+  refill_rate: 20
+
+# Logging de producción
+logging:
+  level: warn           # Solo warnings y errors en prod
+  format: json
+
+# Pares de producción
+business:
+  supported_pairs:
+    - "BTC/USD"
+    - "BTC/EUR"
+    - "ETH/USD"
+    - "ETH/EUR"
+    - "LTC/USD"
+    - "XRP/USD"
+  cache_prefix: "prod:"

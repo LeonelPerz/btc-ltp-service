@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ===== CASOS DE ÉXITO - FUNCIONAMIENTO NORMAL =====
-
 func TestKrakenTickerData_GetLastTradedPrice_Success(t *testing.T) {
 	tickerData := KrakenTickerData{
 		LastTradeClosed: []string{"50000.5", "1.0"},
@@ -72,11 +70,9 @@ func TestKrakenTickerResponse_ValidResponse(t *testing.T) {
 	assert.Equal(t, 50000.0, price)
 }
 
-// ===== CASOS DE ERROR - MANEJO DE ERRORES Y EXCEPCIONES =====
-
 func TestKrakenTickerData_GetLastTradedPrice_EmptyData(t *testing.T) {
 	tickerData := KrakenTickerData{
-		LastTradeClosed: []string{}, // Empty array
+		LastTradeClosed: []string{},
 	}
 
 	_, err := tickerData.GetLastTradedPrice()
@@ -98,7 +94,7 @@ func TestKrakenTickerData_GetLastTradedPrice_InvalidPrice(t *testing.T) {
 
 func TestKrakenTickerData_GetLastTradedPrice_NilData(t *testing.T) {
 	tickerData := KrakenTickerData{
-		LastTradeClosed: nil, // Nil slice
+		LastTradeClosed: nil,
 	}
 
 	_, err := tickerData.GetLastTradedPrice()
@@ -127,8 +123,6 @@ func TestKrakenTickerResponse_EmptyResult(t *testing.T) {
 	assert.Empty(t, response.Error)
 	assert.Empty(t, response.Result)
 }
-
-// ===== EDGE CASES - CASOS LÍMITE Y SITUACIONES EXTREMAS =====
 
 func TestKrakenTickerData_GetLastTradedPrice_ZeroPrice(t *testing.T) {
 	tickerData := KrakenTickerData{
@@ -198,7 +192,6 @@ func TestKrakenTickerData_CompleteDataStructure(t *testing.T) {
 		OpeningPrice:        "49750.0",
 	}
 
-	// Verificar que todos los campos están presentes
 	assert.Len(t, tickerData.Ask, 3)
 	assert.Len(t, tickerData.Bid, 3)
 	assert.Len(t, tickerData.LastTradeClosed, 2)
@@ -209,7 +202,6 @@ func TestKrakenTickerData_CompleteDataStructure(t *testing.T) {
 	assert.Len(t, tickerData.High, 2)
 	assert.NotEmpty(t, tickerData.OpeningPrice)
 
-	// Verificar que el precio se puede extraer correctamente
 	price, err := tickerData.GetLastTradedPrice()
 	require.NoError(t, err)
 	assert.Equal(t, 50000.0, price)
@@ -220,7 +212,6 @@ func TestKrakenTickerData_OpeningPriceAsString(t *testing.T) {
 		OpeningPrice: "49500.0",
 	}
 
-	// Verificar que OpeningPrice puede ser string
 	assert.IsType(t, "", tickerData.OpeningPrice)
 	assert.Equal(t, "49500.0", tickerData.OpeningPrice)
 }
@@ -230,7 +221,6 @@ func TestKrakenTickerData_OpeningPriceAsArray(t *testing.T) {
 		OpeningPrice: []string{"49500.0", "49600.0"},
 	}
 
-	// Verificar que OpeningPrice puede ser array
 	assert.IsType(t, []string{}, tickerData.OpeningPrice)
 	openingArray := tickerData.OpeningPrice.([]string)
 	assert.Len(t, openingArray, 2)
@@ -244,7 +234,6 @@ func TestKrakenTickerData_NumberOfTradesAsInts(t *testing.T) {
 
 	assert.Len(t, tickerData.NumberOfTrades, 2)
 
-	// Verificar que los valores se pueden convertir a enteros
 	if val, ok := tickerData.NumberOfTrades[0].(int); ok {
 		assert.Equal(t, 10, val)
 	} else {
@@ -259,15 +248,12 @@ func TestKrakenTickerData_NumberOfTradesAsFloats(t *testing.T) {
 
 	assert.Len(t, tickerData.NumberOfTrades, 2)
 
-	// Verificar que los valores se pueden convertir a floats
 	if val, ok := tickerData.NumberOfTrades[0].(float64); ok {
 		assert.Equal(t, 10.0, val)
 	} else {
 		t.Error("First NumberOfTrades value is not a float64")
 	}
 }
-
-// ===== CONCURRENCIA - ACCESO CONCURRENTE Y THREAD-SAFETY =====
 
 func TestKrakenTickerData_ConcurrentAccess(t *testing.T) {
 	tickerData := KrakenTickerData{
@@ -289,7 +275,6 @@ func TestKrakenTickerData_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	// Recoger todos los resultados
 	for i := 0; i < numGoroutines; i++ {
 		select {
 		case price := <-results:
@@ -318,7 +303,6 @@ func TestKrakenTickerData_ConcurrentTimestamp(t *testing.T) {
 
 	after := time.Now()
 
-	// Verificar que todos los timestamps están en el rango esperado
 	for i := 0; i < numGoroutines; i++ {
 		select {
 		case timestamp := <-timestamps:
@@ -330,14 +314,11 @@ func TestKrakenTickerData_ConcurrentTimestamp(t *testing.T) {
 	}
 }
 
-// ===== PERFORMANCE TESTS =====
-
 func TestKrakenTickerData_GetLastTradedPrice_Performance(t *testing.T) {
 	tickerData := KrakenTickerData{
 		LastTradeClosed: []string{"50000.123456789", "1.0"},
 	}
 
-	// Medir el tiempo de múltiples llamadas
 	const numCalls = 10000
 	start := time.Now()
 
@@ -348,14 +329,12 @@ func TestKrakenTickerData_GetLastTradedPrice_Performance(t *testing.T) {
 
 	duration := time.Since(start)
 
-	// Verificar que el tiempo por llamada es razonable (menos de 1ms por llamada)
 	avgTimePerCall := duration / numCalls
 	assert.Less(t, avgTimePerCall, time.Millisecond,
 		"GetLastTradedPrice is too slow: %v per call", avgTimePerCall)
 }
 
 func TestKrakenTickerResponse_LargeResult(t *testing.T) {
-	// Crear una respuesta con muchos pares para probar el rendimiento
 	result := make(map[string]KrakenTickerData)
 
 	for i := 0; i < 1000; i++ {
@@ -373,7 +352,6 @@ func TestKrakenTickerResponse_LargeResult(t *testing.T) {
 	assert.Empty(t, response.Error)
 	assert.Len(t, response.Result, 1000)
 
-	// Verificar que podemos acceder a los datos eficientemente
 	for pairName, tickerData := range response.Result {
 		price, err := tickerData.GetLastTradedPrice()
 		require.NoError(t, err)

@@ -1,0 +1,41 @@
+# Configuración Base - Demostración de Precedencia
+# Esta configuración se sobrescribe con ENV vars para demostrar precedencia
+
+# PRECEDENCIA: defaults → config.yaml → config.{env}.yaml → ENV vars
+
+server:
+  port: 9000              # Será sobrescrito por ENV: PORT=8080
+  shutdown_timeout: 45s   # Será sobrescrito por ENV o permanecerá
+
+cache:
+  backend: redis          # Será sobrescrito por ENV: CACHE_BACKEND=memory  
+  ttl: 60s               # Será sobrescrito por ENV: CACHE_TTL=30s
+  redis:
+    addr: redis:6379     # Será sobrescrito por ENV: REDIS_ADDR=localhost:6379
+    password: "secret"   # ENV puede sobrescribir con REDIS_PASSWORD=""
+    db: 1               # Será sobrescrito por ENV: REDIS_DB=0
+
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    websocket_url: wss://ws.kraken.com
+    timeout: 15s         # Diferente del default
+    request_timeout: 5s  # Diferente del default
+    fallback_timeout: 8s 
+    max_retries: 2       # Diferente del default
+
+rate_limit:
+  enabled: false         # Será sobrescrito por ENV: RATE_LIMIT_ENABLED=true
+  capacity: 50          # Será sobrescrito por ENV: RATE_LIMIT_CAPACITY=100
+  refill_rate: 5        # Será sobrescrito por ENV: RATE_LIMIT_REFILL_RATE=10
+
+logging:
+  level: debug          # Será sobrescrito por ENV: LOG_LEVEL=info
+  format: text          # Será sobrescrito por ENV: LOG_FORMAT=json
+
+business:
+  supported_pairs:      # Será sobrescrito por ENV: SUPPORTED_PAIRS="BTC/USD,ETH/USD"
+    - "BTC/EUR"
+    - "ETH/EUR"  
+    - "LTC/EUR"
+  cache_prefix: "demo:" # Diferente del default

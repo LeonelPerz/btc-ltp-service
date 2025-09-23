@@ -1,0 +1,38 @@
+# Configuración de Test - Valores Zero Explícitos
+# Para forzar valores zero que deben fallar
+
+server:
+  port: 8080  
+  shutdown_timeout: 30s
+
+cache:
+  backend: memory
+  ttl: 0s  # ❌ TTL explícitamente 0s - debe fallar
+  redis:
+    addr: localhost:6379
+    password: ""
+    db: 0
+
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    websocket_url: wss://ws.kraken.com
+    timeout: 0s  # ❌ Timeout 0s - debe fallar
+    request_timeout: 3s
+    fallback_timeout: 5s
+    max_retries: 3
+
+rate_limit:
+  enabled: true
+  capacity: 100
+  refill_rate: 10
+
+logging:
+  level: info
+  format: json
+
+business:
+  supported_pairs:
+    - "BTC/USD"
+    - "ETH/USD"
+  cache_prefix: ""  # ❌ Cache prefix vacío - debe fallar

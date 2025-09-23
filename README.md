@@ -323,16 +323,140 @@ The service supports the following cryptocurrency pairs by default:
 | `KRAKEN_FALLBACK_TIMEOUT` | `15s` | WebSocket timeout |
 | `KRAKEN_MAX_RETRIES` | `3` | Retry attempts |
 
-### Configuration Files
+### Configuration Files & Precedence System
 
-The service uses a hierarchical configuration system:
+The service implements a **robust hierarchical configuration system** with fail-fast validation:
 
-- `configs/config.yaml` - Base configuration
-- `configs/config.development.yaml` - Development overrides
-- `configs/config.production.yaml` - Production overrides
-- `configs/config.test.yaml` - Testing overrides
+#### 🏗️ Configuration Precedence Order
+```
+1. Default Values (in code) 
+    ↓ (overridden by)
+2. Base config.yaml  
+    ↓ (overridden by)
+3. Environment-specific config.{env}.yaml
+    ↓ (overridden by) 
+4. Environment Variables (highest priority)
+```
+
+#### 📁 Available Configuration Files
+
+| File | Purpose | Description |
+|------|---------|-------------|
+| **Base Configuration** | | |
+| `config.yaml` | Production default | Base configuration for all environments |
+| `config.production.yaml` | Production env | Optimized settings for production deployment |
+| `config.demo-precedence.yaml` | Precedence demo | Demonstrates ENV override behavior |
+| **Testing & Validation** | | |
+| `config.test-bad-ttl.yaml` | TTL validation | Contains invalid TTL values for testing |
+| `config.test-invalid-types.yaml` | Type validation | Invalid data types for parsing tests |
+| `config.test-zero-values.yaml` | Zero value detection | Explicit zero values that should fail |
+| `config.explicit-zero.yaml` | Explicit zeros | Zero values with units (0s, 0ms) |
+| `config.test-missing-units.yaml` | Unit validation | Numbers without time units |
+| **Environment Files** | | |
+| `demo.env` | ENV variables demo | Sample environment variable overrides |
+
+#### 🎯 Precedence Examples
+
+**Base YAML Configuration**:
+```yaml
+# configs/config.demo-precedence.yaml
+server:
+  port: 9000              # Will be overridden by ENV
+cache:
+  backend: redis          # Will be overridden by ENV
+  ttl: 60s               # Will be overridden by ENV
+logging:
+  level: debug           # Will be overridden by ENV
+```
+
+**Environment Override**:
+```bash
+# These ENV vars override YAML values
+export PORT=8080                    # Overrides port: 9000
+export CACHE_BACKEND=memory         # Overrides backend: redis  
+export CACHE_TTL=30s               # Overrides ttl: 60s
+export LOG_LEVEL=info              # Overrides level: debug
+
+go run cmd/api/main.go -config configs/config.demo-precedence.yaml
+# Result: Uses port=8080, backend=memory, ttl=30s, level=info
+```
+
+#### ⚡ Fail-Fast Configuration Validation
+
+The service implements **comprehensive validation** that fails fast on startup:
+
+**Bad TTL Detection**:
+```bash
+# ❌ These will fail immediately on startup:
+CACHE_TTL=50ms go run cmd/api/main.go
+# Error: "TTL too short: 50ms, minimum 100ms (causes excessive cache churn)"
+
+CACHE_TTL=25h go run cmd/api/main.go  
+# Error: "TTL too long: 25h, maximum 24h (stale data risk)"
+```
+
+**Unknown Trading Pairs Detection**:
+```bash
+# ❌ This will fail immediately:
+SUPPORTED_PAIRS="BTC/USD,DOGE/MOON" go run cmd/api/main.go
+# Error: "unknown trading pairs: [DOGE/MOON], supported pairs: [BTC/USD, ETH/USD, ...]"
+```
 
 **Environment Detection**: Automatically detects environment via `ENVIRONMENT` variable or falls back to `development`.
+
+#### 🚀 Quick Configuration Examples
+
+```bash
+# 1. Use default configuration
+go run cmd/api/main.go
+
+# 2. Use specific config file
+go run cmd/api/main.go -config configs/config.production.yaml
+
+# 3. Override with environment variables
+PORT=9000 CACHE_TTL=60s go run cmd/api/main.go
+
+# 4. Load from environment file
+source configs/demo.env && go run cmd/api/main.go
+
+# 5. Test fail-fast validation
+go run cmd/api/main.go -config configs/config.test-bad-ttl.yaml
+```
+
+#### 🧪 Configuration Testing & Validation Scripts
+
+The service includes automated scripts for testing configuration validation:
+
+```bash
+# Test all configuration validation scenarios
+./scripts/demo-config-validation.sh
+
+# Test invalid data types handling  
+./scripts/demo-invalid-types.sh
+
+# Manual testing examples:
+CACHE_TTL=10ms go run cmd/api/main.go          # ❌ TTL too short
+SUPPORTED_PAIRS="FAKE/COIN" go run cmd/api/main.go  # ❌ Unknown pair
+PORT=8080 LOG_LEVEL=debug go run cmd/api/main.go    # ✅ Valid override
+```
+
+#### 🔍 Configuration Validation Features
+
+| Validation Type | Examples | Error Behavior |
+|----------------|----------|----------------|
+| **TTL Validation** | `50ms`, `25h`, `invalid` | Fails before service start |
+| **Trading Pairs** | `DOGE/MOON`, `INVALID` | Lists valid alternatives |
+| **Data Types** | `"abc"` for numbers | Viper parsing error |
+| **Missing Units** | `30` instead of `30s` | Duration parsing error |
+| **Zero Values** | `ttl: 0`, `port: 0` | Detected as parsing errors |
+
+**Key Benefits**:
+- 🚀 **Fail-Fast**: Invalid configs prevent service startup
+- 🔍 **Specific Errors**: Clear error messages with suggestions  
+- 🛡️ **Multiple Layers**: Viper parsing + Custom validation + Business rules
+- 📝 **Helpful Messages**: Shows valid alternatives and reasoning
+
+For complete validation examples and testing, see [`docs/CONFIG-VALIDATION.md`](docs/CONFIG-VALIDATION.md).
 
 ---
 
@@ -537,9 +661,18 @@ btc-ltp-service/
 │       ├── metrics/            # Prometheus metrics
 │       ├── repositories/       # Data access (cache)
 │       └── web/                # HTTP layer (handlers, middleware)
-├── configs/                    # Configuration files
+├── configs/                    # Configuration files & validation examples
+│   ├── config.yaml             # Base configuration
+│   ├── config.production.yaml  # Production environment 
+│   ├── config.demo-precedence.yaml # Precedence demonstration
+│   ├── config.test-*.yaml      # Validation test cases
+│   └── demo.env               # Environment variables example
+├── scripts/                    # Configuration demo & validation scripts
+│   ├── demo-config-validation.sh # Comprehensive validation demo
+│   └── demo-invalid-types.sh   # Invalid data types demo
 ├── benchmarks/                 # Load testing scripts
 ├── docs/                       # Documentation
+│   └── CONFIG-VALIDATION.md    # Configuration validation guide
 └── docker-compose.yml          # Development stack
 ```
 

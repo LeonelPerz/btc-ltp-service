@@ -1,0 +1,47 @@
+# Configuración de Test - TTL Inválido (Fail Fast Demo)
+# Esta configuración deliberadamente tiene valores inválidos para demostrar la validación
+
+# Configuración del servidor HTTP
+server:
+  port: 8080
+  shutdown_timeout: 30s
+
+# ❌ Cache con TTL inválido - Debe fallar validación
+cache:
+  backend: memory
+  ttl: 50ms  # ❌ TTL muy corto - causará excessive cache churn
+  redis:
+    addr: localhost:6379
+    password: ""
+    db: 0
+
+# Configuración de exchanges de criptomonedas
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    websocket_url: wss://ws.kraken.com
+    timeout: 10s
+    request_timeout: 3s
+    fallback_timeout: 5s
+    max_retries: 3
+
+# Configuración de rate limiting
+rate_limit:
+  enabled: true
+  capacity: 100
+  refill_rate: 10
+
+# Configuración del sistema de logging
+logging:
+  level: info
+  format: json
+
+# ❌ Business config con pares desconocidos - Debe fallar validación
+business:
+  supported_pairs:
+    - "BTC/USD"     # ✅ Par válido
+    - "ETH/USD"     # ✅ Par válido
+    - "DOGE/MOON"   # ❌ Par desconocido - debe fallar
+    - "INVALID"     # ❌ Formato inválido - debe fallar
+    - "FAKE/COIN"   # ❌ Par desconocido - debe fallar
+  cache_prefix: "price:"

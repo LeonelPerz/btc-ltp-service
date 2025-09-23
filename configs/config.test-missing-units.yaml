@@ -1,0 +1,44 @@
+# Configuración de Test - Unidades Faltantes (Fail Fast Demo)
+# Esta configuración tiene números sin unidades de tiempo
+
+# Configuración del servidor HTTP
+server:
+  port: 8080
+  shutdown_timeout: 30s
+
+# ❌ Cache con TTL sin unidades
+cache:
+  backend: memory
+  ttl: 30  # ❌ Número sin unidad de tiempo - debe fallar
+  redis:
+    addr: localhost:6379
+    password: ""
+    db: 0
+
+# Configuración de exchanges de criptomonedas
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    websocket_url: wss://ws.kraken.com
+    timeout: 10s
+    request_timeout: 3s
+    fallback_timeout: 5s
+    max_retries: 3
+
+# Configuración de rate limiting
+rate_limit:
+  enabled: true
+  capacity: 100
+  refill_rate: 10
+
+# Configuración del sistema de logging
+logging:
+  level: info
+  format: json
+
+# Business config con pares válidos
+business:
+  supported_pairs:
+    - "BTC/USD"
+    - "ETH/USD"
+  cache_prefix: "price:"
