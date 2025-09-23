@@ -5,7 +5,9 @@ import (
 	cachepkg "btc-ltp-service/internal/infrastructure/repositories/cache"
 	"context"
 	"encoding/json"
+	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -418,4 +420,119 @@ func BenchmarkMemoryAllocation_TickerDataParsing(b *testing.B) {
 		_ = tickerData.GetTimestamp()
 		_ = tickerData.GetAge()
 	}
+}
+
+// ===== NEW BENCHMARKS FOR 429/5XX SIMULATION =====
+
+func BenchmarkRestClient_GetTicker_With429Simulation(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate 429 every 10 requests to measure impact of backoff
+		if rand.Intn(10) == 0 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := client.GetTicker(ctx, "BTC/USD")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkRestClient_GetTicker_With5xxSimulation(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate 5xx every 15 requests to measure impact of backoff
+		if rand.Intn(15) == 0 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := client.GetTicker(ctx, "BTC/USD")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkRestClient_BackoffPerformance_Comparison(b *testing.B) {
+	b.Run("NoErrors", func(b *testing.B) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockResponse)
+		}))
+		defer server.Close()
+
+		client := &RestClient{
+			baseURL:    server.URL,
+			httpClient: &http.Client{Timeout: DefaultTimeout},
+		}
+
+		ctx := context.Background()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := client.GetTicker(ctx, "BTC/USD")
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("With429Errors", func(b *testing.B) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 5% chance of 429 error (less aggressive for benchmark completion)
+			if rand.Intn(20) == 0 {
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockResponse)
+		}))
+		defer server.Close()
+
+		client := &RestClient{
+			baseURL:    server.URL,
+			httpClient: &http.Client{Timeout: DefaultTimeout},
+		}
+
+		ctx := context.Background()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := client.GetTicker(ctx, "BTC/USD")
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }

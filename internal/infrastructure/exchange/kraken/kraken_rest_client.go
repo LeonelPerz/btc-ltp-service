@@ -82,6 +82,18 @@ func (k *RestClient) GetTicker(ctx context.Context, pair string) (*entities.Pric
 		retry.Context(ctx),
 		retry.OnRetry(func(n uint, err error) {
 			metrics.RecordExternalAPIRetry("kraken", "/Ticker", int(n+1))
+
+			// Record specific metrics for 429 rate limiting
+			if strings.Contains(err.Error(), "HTTP 429") {
+				metrics.RecordKrakenRateLimitDrop("/Ticker")
+				// Calculate backoff duration for this attempt
+				backoffDuration := time.Duration(n+1) * BaseBackoff
+				if backoffDuration > MaxBackoff {
+					backoffDuration = MaxBackoff
+				}
+				metrics.RecordKrakenBackoffDuration("/Ticker", int(n+1), backoffDuration.Seconds())
+			}
+
 			logging.Warn(ctx, "Kraken API retry attempt", logging.Fields{
 				"service":      "kraken",
 				"operation":    "GetTicker",
@@ -89,6 +101,7 @@ func (k *RestClient) GetTicker(ctx context.Context, pair string) (*entities.Pric
 				"max_attempts": MaxRetries,
 				"pair":         pair,
 				"error":        err.Error(),
+				"is_429":       strings.Contains(err.Error(), "HTTP 429"),
 			})
 		}),
 	)
@@ -139,6 +152,12 @@ func (k *RestClient) doTickerRequest(ctx context.Context, krakenPair, originalPa
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 		metrics.RecordExternalAPICall("kraken", "/Ticker", resp.StatusCode, float64(requestDuration.Nanoseconds())/1e6)
 		return nil, fmt.Errorf("%w: HTTP %d (server error)", ErrRetryableRequest, resp.StatusCode)
+	}
+
+	// CRITICAL FIX: Handle HTTP 429 (Too Many Requests) as retryable
+	if resp.StatusCode == http.StatusTooManyRequests {
+		metrics.RecordExternalAPICall("kraken", "/Ticker", resp.StatusCode, float64(requestDuration.Nanoseconds())/1e6)
+		return nil, fmt.Errorf("%w: HTTP %d (rate limited by kraken)", ErrRetryableRequest, resp.StatusCode)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -234,6 +253,18 @@ func (k *RestClient) GetTickers(ctx context.Context, pairs []string) ([]*entitie
 		retry.Context(ctx),
 		retry.OnRetry(func(n uint, err error) {
 			metrics.RecordExternalAPIRetry("kraken", "/Ticker", int(n+1))
+
+			// Record specific metrics for 429 rate limiting
+			if strings.Contains(err.Error(), "HTTP 429") {
+				metrics.RecordKrakenRateLimitDrop("/Ticker")
+				// Calculate backoff duration for this attempt
+				backoffDuration := time.Duration(n+1) * BaseBackoff
+				if backoffDuration > MaxBackoff {
+					backoffDuration = MaxBackoff
+				}
+				metrics.RecordKrakenBackoffDuration("/Ticker", int(n+1), backoffDuration.Seconds())
+			}
+
 			logging.Warn(ctx, "Kraken API retry attempt", logging.Fields{
 				"service":      "kraken",
 				"operation":    "GetTickers",
@@ -241,6 +272,7 @@ func (k *RestClient) GetTickers(ctx context.Context, pairs []string) ([]*entitie
 				"max_attempts": MaxRetries,
 				"pairs_count":  len(pairs),
 				"error":        err.Error(),
+				"is_429":       strings.Contains(err.Error(), "HTTP 429"),
 			})
 		}),
 	)
@@ -278,6 +310,12 @@ func (k *RestClient) doTickersRequest(ctx context.Context, krakenPairs, original
 	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
 		metrics.RecordExternalAPICall("kraken", "/Ticker", resp.StatusCode, float64(requestDuration.Nanoseconds())/1e6)
 		return nil, fmt.Errorf("%w: HTTP %d (server error)", ErrRetryableRequest, resp.StatusCode)
+	}
+
+	// CRITICAL FIX: Handle HTTP 429 (Too Many Requests) as retryable
+	if resp.StatusCode == http.StatusTooManyRequests {
+		metrics.RecordExternalAPICall("kraken", "/Ticker", resp.StatusCode, float64(requestDuration.Nanoseconds())/1e6)
+		return nil, fmt.Errorf("%w: HTTP %d (rate limited by kraken)", ErrRetryableRequest, resp.StatusCode)
 	}
 
 	if resp.StatusCode != http.StatusOK {

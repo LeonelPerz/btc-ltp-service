@@ -138,6 +138,24 @@ var (
 		[]string{"client_id"}, // client_id: IP address or identifier
 	)
 
+	// Kraken Rate Limiting Metrics
+	KrakenRateLimitDrops = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "btc_ltp_kraken_rate_limit_drops_total",
+			Help: "Number of requests dropped due to Kraken rate limiting (429 responses)",
+		},
+		[]string{"endpoint"},
+	)
+
+	KrakenBackoffDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "btc_ltp_kraken_backoff_duration_seconds",
+			Help:    "Duration of backoff delays due to Kraken rate limiting",
+			Buckets: []float64{0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0},
+		},
+		[]string{"endpoint", "attempt"},
+	)
+
 	// Application Metrics
 	ApplicationInfo = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -231,6 +249,16 @@ func RecordRateLimitResult(allowed bool) {
 // UpdateRateLimitTokens updates remaining tokens gauge
 func UpdateRateLimitTokens(clientID string, tokens float64) {
 	RateLimitTokensRemaining.WithLabelValues(clientID).Set(tokens)
+}
+
+// RecordKrakenRateLimitDrop records requests dropped due to Kraken 429 responses
+func RecordKrakenRateLimitDrop(endpoint string) {
+	KrakenRateLimitDrops.WithLabelValues(endpoint).Inc()
+}
+
+// RecordKrakenBackoffDuration records duration of backoff delays
+func RecordKrakenBackoffDuration(endpoint string, attempt int, duration float64) {
+	KrakenBackoffDuration.WithLabelValues(endpoint, strconv.Itoa(attempt)).Observe(duration)
 }
 
 // SetApplicationInfo sets application information

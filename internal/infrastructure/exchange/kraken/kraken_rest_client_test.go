@@ -568,6 +568,178 @@ func TestRestClient_isRetryableError_NonRetryableErrors(t *testing.T) {
 	assert.False(t, client.isRetryableError(fmt.Errorf("some other error")))
 }
 
+// ===== NEW TESTS FOR 429/5XX SIMULATION =====
+
+func TestRestClient_GetTicker_HTTP429_WithBackoff(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 2 {
+			// Return 429 for first two attempts
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		// Success on the third attempt
+		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	startTime := time.Now()
+
+	price, err := client.GetTicker(ctx, "BTC/USD")
+	duration := time.Since(startTime)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, price)
+	assert.Equal(t, "BTC/USD", price.Pair)
+	assert.Equal(t, 50000.0, price.Amount)
+	assert.Equal(t, 3, callCount)                     // Validate 3 attempts were made
+	assert.Greater(t, duration, 200*time.Millisecond) // Validate backoff delay occurred
+}
+
+func TestRestClient_GetTicker_HTTP429_ExceedsMaxRetries(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// Always return 429 to test max retry limit
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	startTime := time.Now()
+
+	_, err := client.GetTicker(ctx, "BTC/USD")
+	duration := time.Since(startTime)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get ticker after retries")
+	assert.Contains(t, err.Error(), "HTTP 429")
+	assert.Equal(t, MaxRetries, callCount)            // Validate max retries were attempted
+	assert.Greater(t, duration, 300*time.Millisecond) // Validate multiple backoffs occurred
+}
+
+func TestRestClient_GetTickers_HTTP429_WithBackoff(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// Return 429 on first attempt
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		// Success on second attempt
+		mockResponse := KrakenTickerResponse{
+			Error: []string{},
+			Result: map[string]KrakenTickerData{
+				"XXBTZUSD": {LastTradeClosed: []string{"50000.0", "1.0"}},
+				"XETHZUSD": {LastTradeClosed: []string{"3000.0", "1.0"}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	pairs := []string{"BTC/USD", "ETH/USD"}
+	startTime := time.Now()
+
+	prices, err := client.GetTickers(ctx, pairs)
+	duration := time.Since(startTime)
+
+	assert.NoError(t, err)
+	assert.Len(t, prices, 2)
+	assert.Equal(t, 2, callCount)                     // Validate retry occurred
+	assert.Greater(t, duration, 100*time.Millisecond) // Validate backoff delay occurred
+}
+
+func TestRestClient_GetTicker_HTTP5xx_WithBackoff(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 1 {
+			// Return 503 Service Unavailable for first attempt
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		// Success on second attempt
+		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockResponse)
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	startTime := time.Now()
+
+	price, err := client.GetTicker(ctx, "BTC/USD")
+	duration := time.Since(startTime)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, price)
+	assert.Equal(t, 2, callCount)                     // Validate retry occurred
+	assert.Greater(t, duration, 100*time.Millisecond) // Validate backoff delay occurred
+}
+
+func TestRestClient_GetTicker_Mixed429And5xx_Errors(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		switch callCount {
+		case 1:
+			w.WriteHeader(http.StatusTooManyRequests) // 429 on first attempt
+		case 2:
+			w.WriteHeader(http.StatusInternalServerError) // 500 on second attempt
+		default:
+			// Success on third attempt
+			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockResponse)
+		}
+	}))
+	defer server.Close()
+
+	client := &RestClient{
+		baseURL:    server.URL,
+		httpClient: &http.Client{Timeout: DefaultTimeout},
+	}
+
+	ctx := context.Background()
+	startTime := time.Now()
+
+	price, err := client.GetTicker(ctx, "BTC/USD")
+	duration := time.Since(startTime)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, price)
+	assert.Equal(t, 3, callCount)                     // Validate all retries were used
+	assert.Greater(t, duration, 200*time.Millisecond) // Validate multiple backoffs occurred
+}
+
 // ===== PAIR CONVERSION TESTS =====
 
 func TestToKrakenPair_ValidPairs(t *testing.T) {
