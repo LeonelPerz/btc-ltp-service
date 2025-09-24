@@ -88,7 +88,7 @@ func main() {
 	dependencies.StopCacheRefresh = stopCacheRefresh // Add for graceful shutdown
 
 	// 6. Configure router with dependencies and configuration
-	appRouter := router.NewRouter(dependencies.PriceService, cfg.Business.SupportedPairs, cfg.RateLimit)
+	appRouter := router.NewRouter(dependencies.PriceService, cfg.Business.SupportedPairs, cfg.RateLimit, cfg.Auth)
 	handler := appRouter.GetHandler()
 
 	// 7. Crear servidor HTTP

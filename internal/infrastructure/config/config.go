@@ -10,6 +10,7 @@ type Config struct {
 	Cache       CacheConfig       `yaml:"cache" mapstructure:"cache"`
 	Exchange    ExchangeConfig    `yaml:"exchange" mapstructure:"exchange"`
 	RateLimit   RateLimitConfig   `yaml:"rate_limit" mapstructure:"rate_limit"`
+	Auth        AuthConfig        `yaml:"auth" mapstructure:"auth"`
 	Logging     LoggingConfig     `yaml:"logging" mapstructure:"logging"`
 	Business    BusinessConfig    `yaml:"business" mapstructure:"business"`
 	Development DevelopmentConfig `yaml:"development" mapstructure:"development"`
@@ -56,6 +57,14 @@ type RateLimitConfig struct {
 	Enabled    bool `yaml:"enabled" mapstructure:"enabled"`
 	Capacity   int  `yaml:"capacity" mapstructure:"capacity"`
 	RefillRate int  `yaml:"refill_rate" mapstructure:"refill_rate"`
+}
+
+// AuthConfig contains authentication configuration
+type AuthConfig struct {
+	Enabled     bool     `yaml:"enabled" mapstructure:"enabled,string"`
+	APIKey      string   `yaml:"api_key" mapstructure:"api_key"`
+	HeaderName  string   `yaml:"header_name" mapstructure:"header_name"`
+	UnauthPaths []string `yaml:"unauth_paths" mapstructure:"unauth_paths"`
 }
 
 // LoggingConfig contains logging system configuration
@@ -108,6 +117,12 @@ func GetDefaultConfig() *Config {
 			Enabled:    true,
 			Capacity:   100,
 			RefillRate: 10,
+		},
+		Auth: AuthConfig{
+			Enabled:     false, // Disabled by default
+			APIKey:      "",
+			HeaderName:  "X-API-Key",
+			UnauthPaths: []string{"/health", "/ready", "/metrics", "/swagger/", "/docs"},
 		},
 		Logging: LoggingConfig{
 			Level:  "info",

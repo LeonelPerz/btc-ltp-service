@@ -90,6 +90,10 @@ func (l *Loader) bindEnvVars() {
 		"rate_limit.capacity":              "RATE_LIMIT_CAPACITY",
 		"rate_limit.refill_rate":           "RATE_LIMIT_REFILL_RATE",
 		"rate_limit.enabled":               "RATE_LIMIT_ENABLED",
+		// Authentication configuration mappings
+		"auth.enabled":     "AUTH_ENABLED",
+		"auth.api_key":     "AUTH_API_KEY",
+		"auth.header_name": "AUTH_HEADER_NAME",
 	}
 
 	for configKey, envVar := range envMappings {

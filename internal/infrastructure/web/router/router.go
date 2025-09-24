@@ -3,10 +3,12 @@ package router
 import (
 	"btc-ltp-service/internal/domain/interfaces"
 	"btc-ltp-service/internal/infrastructure/config"
+	"btc-ltp-service/internal/infrastructure/logging"
 	"btc-ltp-service/internal/infrastructure/metrics"
 	"btc-ltp-service/internal/infrastructure/ratelimit"
 	"btc-ltp-service/internal/infrastructure/web/handlers"
 	"btc-ltp-service/internal/infrastructure/web/middleware"
+	"context"
 	"net/http"
 
 	_ "btc-ltp-service/docs" // Import docs for swagger
@@ -21,14 +23,16 @@ type Router struct {
 	priceService    interfaces.PriceService
 	supportedPairs  []string
 	rateLimitConfig config.RateLimitConfig
+	authConfig      config.AuthConfig
 }
 
 // NewRouter creates a new router instance
-func NewRouter(priceService interfaces.PriceService, supportedPairs []string, rateLimitConfig config.RateLimitConfig) *Router {
+func NewRouter(priceService interfaces.PriceService, supportedPairs []string, rateLimitConfig config.RateLimitConfig, authConfig config.AuthConfig) *Router {
 	return &Router{
 		priceService:    priceService,
 		supportedPairs:  supportedPairs,
 		rateLimitConfig: rateLimitConfig,
+		authConfig:      authConfig,
 	}
 }
 
@@ -59,28 +63,43 @@ func (r *Router) SetupRoutes() http.Handler {
 	mainRouter.HandleFunc("/health", healthHandler.Health).Methods("GET")
 	mainRouter.HandleFunc("/ready", healthHandler.Ready).Methods("GET")
 
-	// API routes (without applying rate limiting here yet)
-	apiRouter := mainRouter.PathPrefix("/api/v1").Subrouter()
+	// Create a separate subrouter for API endpoints (not using PathPrefix on mainRouter)
+	apiRouter := mux.NewRouter()
 
-	// LTP endpoints
+	// LTP endpoints on the separate router
 	apiRouter.HandleFunc("/ltp", ltpHandler.GetLTP).Methods("GET")
 	apiRouter.HandleFunc("/ltp/refresh", ltpHandler.RefreshPrices).Methods("POST")
 	apiRouter.HandleFunc("/ltp/cached", ltpHandler.GetCachedPrices).Methods("GET")
 
 	// Apply middlewares by layer:
-	// 1. For API routes: Rate limiting + all middlewares
-	// 2. For docs/health routes: Only basic middlewares
+	// 1. Auth middleware (if enabled) - applied to API routes before rate limiting
+	// 2. Rate limiting - applied to API routes only
+	// 3. Global middlewares - applied to everything
 
-	// Apply rate limiting ONLY to API subrouter
+	// Prepare API router with Auth middleware (if enabled)
+	var finalAPIRouter http.Handler = apiRouter
+	if r.authConfig.Enabled {
+		// Debug log para verificar la configuración de auth
+		logging.Info(context.Background(), "Applying auth middleware to API routes", logging.Fields{
+			"enabled":      r.authConfig.Enabled,
+			"api_key_set":  r.authConfig.APIKey != "",
+			"header_name":  r.authConfig.HeaderName,
+			"unauth_paths": r.authConfig.UnauthPaths,
+		})
+		authMiddleware := middleware.NewAuthMiddleware(r.authConfig)
+		finalAPIRouter = authMiddleware.Handler(apiRouter)
+	} else {
+		logging.Info(context.Background(), "Auth middleware disabled", nil)
+	}
+
+	// Apply rate limiting to the (potentially auth-wrapped) API router
 	rateLimitMiddleware := ratelimit.NewRateLimitMiddlewareWithConfig(r.rateLimitConfig)
+	rateLimitedAPIRouter := rateLimitMiddleware.Handler(finalAPIRouter)
 
-	// Wrap ONLY the API subrouter with rate limiting
-	rateLimitedAPIRouter := rateLimitMiddleware.Handler(apiRouter)
+	// Mount the fully wrapped API router to the main router
+	mainRouter.PathPrefix("/api/v1").Handler(http.StripPrefix("/api/v1", rateLimitedAPIRouter))
 
-	// Replace the API subrouter with the rate-limited version
-	mainRouter.PathPrefix("/api/v1").Handler(rateLimitedAPIRouter)
-
-	// Apply global middlewares (without rate limiting)
+	// Apply global middlewares to the entire router
 	handler := middleware.RequestTracingMiddleware(mainRouter)
 	handler = metrics.HTTPMetricsMiddleware(handler)
 	handler = middleware.LoggingMiddleware(handler)

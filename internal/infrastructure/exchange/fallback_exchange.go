@@ -429,8 +429,12 @@ func (f *FallbackExchange) determineFallbackReason(err error) string {
 	errStr := strings.ToLower(err.Error())
 
 	// Analyze error message to determine reason
+	// Note: Order matters - more specific conditions should come first
 	if strings.Contains(errStr, "timeout") {
 		return "timeout"
+	}
+	if strings.Contains(errStr, "closed") || strings.Contains(errStr, "disconnected") {
+		return "connection_closed"
 	}
 	if strings.Contains(errStr, "connection") {
 		return "connection_error"
@@ -440,9 +444,6 @@ func (f *FallbackExchange) determineFallbackReason(err error) string {
 	}
 	if strings.Contains(errStr, "panic") {
 		return "panic"
-	}
-	if strings.Contains(errStr, "closed") || strings.Contains(errStr, "disconnected") {
-		return "connection_closed"
 	}
 
 	return "unknown_error"

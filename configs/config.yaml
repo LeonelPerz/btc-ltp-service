@@ -31,6 +31,18 @@ rate_limit:
   capacity: 100    # requests per bucket
   refill_rate: 10  # requests per second refill
 
+# Configuración de autenticación API-key
+auth:
+  enabled: false               # Disabled by default - enable with environment variable AUTH_ENABLED=true
+  api_key: ""                 # Set via environment variable AUTH_API_KEY
+  header_name: "X-API-Key"    # Header name for API key
+  unauth_paths:               # Paths that don't require authentication
+    - "/health"
+    - "/ready"
+    - "/metrics" 
+    - "/swagger/"
+    - "/docs"
+
 # Configuración del sistema de logging
 logging:
   level: info      # Options: debug, info, warn, error
