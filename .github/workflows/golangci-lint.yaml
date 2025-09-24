@@ -162,11 +162,7 @@ jobs:
           echo "- ✅ Error handling and edge cases" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Race condition prevention" >> $GITHUB_STEP_SUMMARY
           
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Coverage Thresholds" >> $GITHUB_STEP_SUMMARY
-          echo "- 🎯 **Target**: 70%+ per critical package" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 **Excellent**: 80%+ overall" >> $GITHUB_STEP_SUMMARY
-          echo "- ⭐ **Outstanding**: 90%+ overall" >> $GITHUB_STEP_SUMMARY
+         
       
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
@@ -236,12 +232,6 @@ jobs:
           # Generate badge URL
           BADGE_URL="https://img.shields.io/badge/Coverage-${TOTAL_COV}%25-${{ env.BADGE_COLOR }}?style=flat-square&logo=go"
           
-          # Create coverage status based on thresholds
-          if [ $(echo "${CACHE_COV} >= 70" | bc -l) -eq 1 ] && [ $(echo "${KRAKEN_COV} >= 70" | bc -l) -eq 1 ]; then
-            COVERAGE_STATUS="✅ Passing"
-          else
-            COVERAGE_STATUS="❌ Failing" 
-          fi
           
           # Update README.md with current coverage information
           cat > coverage_section.md << 'EOF'
@@ -252,10 +242,10 @@ jobs:
           
           ![Coverage Badge](BADGE_URL_PLACEHOLDER)
           
-          **Current Coverage**: TOTAL_COV_PLACEHOLDER% overall 
-          - **Cache Package**: CACHE_COV_PLACEHOLDER%  
-          - **Kraken Package**: KRAKEN_COV_PLACEHOLDER%  
-          - **Config Package**: CONFIG_COV_PLACEHOLDER% 
+          **Current Coverage**: TOTAL_COV_PLACEHOLDER% overall
+          - **Cache Package**: CACHE_COV_PLACEHOLDER%
+          - **Kraken Package**: KRAKEN_COV_PLACEHOLDER%
+          - **Config Package**: CONFIG_COV_PLACEHOLDER%
           - **Exchange Package**: EXCHANGE_COV_PLACEHOLDER% 
           
           ### Test Features Covered 
@@ -289,38 +279,15 @@ jobs:
           # First, escape special characters in the badge URL
           BADGE_URL_ESCAPED=$(echo "${BADGE_URL}" | sed 's|&|\\\&|g' | sed 's|%|\\\%|g')
           
-          # Calculate status indicators
-          if [ $(echo "${CACHE_COV} >= 70" | bc -l) -eq 1 ]; then
-            CACHE_STATUS="✅"
-          else
-            CACHE_STATUS="❌"
-          fi
-          
-          if [ $(echo "${KRAKEN_COV} >= 70" | bc -l) -eq 1 ]; then
-            KRAKEN_STATUS="✅"  
-          else
-            KRAKEN_STATUS="❌"
-          fi
-          
-          if [ $(echo "${EXCHANGE_COV} >= 70" | bc -l) -eq 1 ]; then
-            EXCHANGE_STATUS="✅"
-          else
-            EXCHANGE_STATUS="⚠️"
-          fi
-          
           CURRENT_TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
           
           # Replace placeholders with safer substitution
           sed -i "s|BADGE_URL_PLACEHOLDER|${BADGE_URL_ESCAPED}|g" coverage_section.md
           sed -i "s|TOTAL_COV_PLACEHOLDER|${TOTAL_COV}|g" coverage_section.md
-          sed -i "s|STATUS_PLACEHOLDER|${COVERAGE_STATUS}|g" coverage_section.md
           sed -i "s|CACHE_COV_PLACEHOLDER|${CACHE_COV}|g" coverage_section.md
           sed -i "s|KRAKEN_COV_PLACEHOLDER|${KRAKEN_COV}|g" coverage_section.md
           sed -i "s|CONFIG_COV_PLACEHOLDER|${CONFIG_COV}|g" coverage_section.md  
           sed -i "s|EXCHANGE_COV_PLACEHOLDER|${EXCHANGE_COV}|g" coverage_section.md
-          sed -i "s|CACHE_STATUS_PLACEHOLDER|${CACHE_STATUS}|g" coverage_section.md
-          sed -i "s|KRAKEN_STATUS_PLACEHOLDER|${KRAKEN_STATUS}|g" coverage_section.md
-          sed -i "s|EXCHANGE_STATUS_PLACEHOLDER|${EXCHANGE_STATUS}|g" coverage_section.md
           sed -i "s|TIMESTAMP_PLACEHOLDER|${CURRENT_TIMESTAMP}|g" coverage_section.md
           
           # Check if coverage markers exist in README
