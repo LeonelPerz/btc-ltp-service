@@ -137,12 +137,6 @@ go test -race ./internal/infrastructure/repositories/cache/...
 go test -race ./internal/infrastructure/exchange/kraken/...
 go test -race ./internal/infrastructure/config/...
 
-# Coverage with HTML report
-```
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
-```
-
 ### Advanced Test Scenarios
 
 #### Cache Eviction Tests
@@ -170,12 +164,8 @@ go tool cover -html=coverage.out -o coverage.html
 
 Our CI/CD pipeline enforces these coverage thresholds:
 
-- 🎯 **Critical Packages**: 70%+ (Cache, Kraken, Config)
-- 📊 **Overall Minimum**: 50%+  
-- 🚀 **Excellent Target**: 80%+
-- ⭐ **Outstanding Goal**: 90%+
+- 🎯 **Critical Packages**: 70%+ (Cache, Kraken)  
 
-View detailed coverage reports: `./reports/coverage/COVERAGE_REPORT.md`
 
 ## 📚 API Documentation
 
