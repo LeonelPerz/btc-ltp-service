@@ -1,0 +1,43 @@
+# Configuración de Demo - Matriz de Resiliencia
+# Esta configuración está optimizada para demostrar el fallback WebSocket → REST
+
+server:
+  port: 8080
+  shutdown_timeout: 30s
+
+cache:
+  backend: memory
+  ttl: 10s   # TTL más corto para mostrar refreshes
+  redis:
+    addr: localhost:6379
+    password: ""
+    db: 0
+
+exchange:
+  kraken:
+    rest_url: https://api.kraken.com/0/public
+    # URL WebSocket inválida para FORZAR el uso de REST fallback
+    websocket_url: wss://invalid-demo-websocket-url.com
+    timeout: 10s
+    request_timeout: 2s
+    # Timeout muy corto para demostrar circuit-breaker rápido
+    fallback_timeout: 200ms   
+    # Pocos reintentos para fallback más rápido
+    max_retries: 2            
+
+rate_limit:
+  enabled: true
+  capacity: 100
+  refill_rate: 10
+
+logging:
+  level: debug    # Debug level para ver todos los logs de fallback
+  format: json    # JSON para mejor parsing
+
+business:
+  supported_pairs:
+    - "BTC/USD"
+    - "ETH/USD" 
+    - "LTC/USD"
+    - "XRP/USD"
+  cache_prefix: "demo-resilience:"

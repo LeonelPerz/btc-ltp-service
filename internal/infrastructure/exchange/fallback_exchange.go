@@ -6,8 +6,10 @@ import (
 	"btc-ltp-service/internal/infrastructure/config"
 	"btc-ltp-service/internal/infrastructure/exchange/kraken"
 	"btc-ltp-service/internal/infrastructure/logging"
+	"btc-ltp-service/internal/infrastructure/metrics"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -46,12 +48,15 @@ func NewFallbackExchange(krakenConfig config.KrakenConfig, supportedPairs []stri
 		select {
 		case err := <-done:
 			if err != nil {
+				metrics.UpdateWebSocketConnectionStatus(false)
+				metrics.RecordWebSocketReconnectionAttempt("startup")
 				logging.Warn(ctx, "Failed to initialize WebSocket connection at startup", logging.Fields{
 					"error":            err.Error(),
 					"websocket_url":    krakenConfig.WebSocketURL,
 					"fallback_timeout": krakenConfig.FallbackTimeout,
 				})
 			} else {
+				metrics.UpdateWebSocketConnectionStatus(true)
 				logging.Info(ctx, "WebSocket connection established successfully", logging.Fields{
 					"websocket_url": krakenConfig.WebSocketURL,
 				})
@@ -70,6 +75,8 @@ func NewFallbackExchange(krakenConfig config.KrakenConfig, supportedPairs []stri
 				}
 			}
 		case <-ctx.Done():
+			metrics.UpdateWebSocketConnectionStatus(false)
+			metrics.RecordWebSocketReconnectionAttempt("startup")
 			logging.Warn(ctx, "WebSocket connection startup timeout", logging.Fields{
 				"timeout":       krakenConfig.FallbackTimeout,
 				"websocket_url": krakenConfig.WebSocketURL,
@@ -109,12 +116,17 @@ func (f *FallbackExchange) GetTicker(ctx context.Context, pair string) (*entitie
 	}
 
 	// 2. Fallback a REST
+	fallbackReason := f.determineFallbackReason(err)
+	metrics.RecordFallbackActivation(fallbackReason, pair)
+
 	logging.Info(ctx, "WebSocket failed, falling back to REST API", logging.Fields{
 		"pair":             pair,
 		"websocket_error":  err.Error(),
+		"fallback_reason":  fallbackReason,
 		"fallback_timeout": f.config.FallbackTimeout,
 	})
 
+	fallbackStartTime := time.Now()
 	restStartTime := time.Now()
 	price, restErr := f.secondary.GetTicker(ctx, pair)
 	restDuration := time.Since(restStartTime)
@@ -129,11 +141,16 @@ func (f *FallbackExchange) GetTicker(ctx context.Context, pair string) (*entitie
 		return nil, fmt.Errorf("both WebSocket and REST failed - WebSocket: %v, REST: %v", err, restErr)
 	}
 
+	// Record successful fallback duration
+	fallbackDuration := time.Since(fallbackStartTime)
+	metrics.RecordFallbackDuration(pair, fallbackDuration.Seconds())
+
 	logging.Info(ctx, "Successfully retrieved price via REST fallback", logging.Fields{
-		"pair":             pair,
-		"amount":           price.Amount,
-		"source":           "rest_fallback",
-		"rest_duration_ms": restDuration.Milliseconds(),
+		"pair":                 pair,
+		"amount":               price.Amount,
+		"source":               "rest_fallback",
+		"rest_duration_ms":     restDuration.Milliseconds(),
+		"fallback_duration_ms": fallbackDuration.Milliseconds(),
 	})
 
 	return price, nil
@@ -180,12 +197,20 @@ func (f *FallbackExchange) GetTickers(ctx context.Context, pairs []string) ([]*e
 	}
 
 	// 2. Fallback a REST
+	fallbackReason := f.determineFallbackReason(err)
+	// Record fallback activation for each pair
+	for _, pair := range pairs {
+		metrics.RecordFallbackActivation(fallbackReason, pair)
+	}
+
 	logging.Info(ctx, "WebSocket failed, falling back to REST API for multiple pairs", logging.Fields{
 		"pairs_count":      len(pairs),
 		"websocket_error":  err.Error(),
+		"fallback_reason":  fallbackReason,
 		"fallback_timeout": f.config.FallbackTimeout,
 	})
 
+	fallbackStartTime := time.Now()
 	restStartTime := time.Now()
 	prices, restErr := f.secondary.GetTickers(ctx, pairs)
 	restDuration := time.Since(restStartTime)
@@ -200,11 +225,20 @@ func (f *FallbackExchange) GetTickers(ctx context.Context, pairs []string) ([]*e
 		return nil, fmt.Errorf("both WebSocket and REST failed for multiple pairs - WebSocket: %v, REST: %v", err, restErr)
 	}
 
+	// Record successful fallback duration for each pair
+	fallbackDuration := time.Since(fallbackStartTime)
+	for _, price := range prices {
+		if price != nil {
+			metrics.RecordFallbackDuration(price.Pair, fallbackDuration.Seconds())
+		}
+	}
+
 	logging.Info(ctx, "Successfully retrieved prices via REST fallback", logging.Fields{
-		"pairs_count":      len(pairs),
-		"retrieved_count":  len(prices),
-		"source":           "rest_fallback",
-		"rest_duration_ms": restDuration.Milliseconds(),
+		"pairs_count":          len(pairs),
+		"retrieved_count":      len(prices),
+		"source":               "rest_fallback",
+		"rest_duration_ms":     restDuration.Milliseconds(),
+		"fallback_duration_ms": fallbackDuration.Milliseconds(),
 	})
 
 	return prices, nil
@@ -320,6 +354,9 @@ func (f *FallbackExchange) GetPrimaryStatus() bool {
 
 // ForceWebSocketReconnect fuerza una reconexión del WebSocket (útil para testing/debugging)
 func (f *FallbackExchange) ForceWebSocketReconnect() error {
+	metrics.RecordWebSocketReconnectionAttempt("manual")
+	metrics.UpdateWebSocketConnectionStatus(false)
+
 	logging.Info(context.Background(), "Forcing WebSocket reconnection", logging.Fields{
 		"websocket_url": f.config.WebSocketURL,
 	})
@@ -330,7 +367,12 @@ func (f *FallbackExchange) ForceWebSocketReconnect() error {
 		})
 	}
 
-	return f.primary.Connect()
+	err := f.primary.Connect()
+	if err == nil {
+		metrics.UpdateWebSocketConnectionStatus(true)
+	}
+
+	return err
 }
 
 // GetConfig retorna la configuración actual (útil para debugging/monitoring)
@@ -376,4 +418,32 @@ func (f *FallbackExchange) startStalenessWatcher(pairs []string, maxAge time.Dur
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+// determineFallbackReason determines the reason for fallback based on error analysis
+func (f *FallbackExchange) determineFallbackReason(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	// Analyze error message to determine reason
+	if strings.Contains(errStr, "timeout") {
+		return "timeout"
+	}
+	if strings.Contains(errStr, "connection") {
+		return "connection_error"
+	}
+	if strings.Contains(errStr, "max retries") || strings.Contains(errStr, "retries") {
+		return "max_retries"
+	}
+	if strings.Contains(errStr, "panic") {
+		return "panic"
+	}
+	if strings.Contains(errStr, "closed") || strings.Contains(errStr, "disconnected") {
+		return "connection_closed"
+	}
+
+	return "unknown_error"
 }

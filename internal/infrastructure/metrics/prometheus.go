@@ -180,6 +180,48 @@ var (
 		},
 		[]string{"pair"},
 	)
+
+	// Resilience and Fallback Metrics
+	FallbackActivationsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "btc_ltp_fallback_activations_total",
+			Help: "Total number of fallback activations from WebSocket to REST",
+		},
+		[]string{"reason", "pair"}, // reason: timeout/connection_error/max_retries/panic
+	)
+
+	FallbackDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "btc_ltp_fallback_duration_seconds",
+			Help:    "Duration of fallback operations from WebSocket failure to REST success",
+			Buckets: []float64{0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0},
+		},
+		[]string{"pair"},
+	)
+
+	WebSocketConnectionStatus = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "btc_ltp_websocket_connection_status",
+			Help: "WebSocket connection status (1=connected, 0=disconnected)",
+		},
+		[]string{},
+	)
+
+	CircuitBreakerState = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "btc_ltp_circuit_breaker_state",
+			Help: "Circuit breaker state (0=closed, 1=open, 2=half_open)",
+		},
+		[]string{"service", "endpoint"},
+	)
+
+	WebSocketReconnectionAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "btc_ltp_websocket_reconnection_attempts_total",
+			Help: "Total number of WebSocket reconnection attempts",
+		},
+		[]string{"reason"}, // reason: startup/connection_lost/manual
+	)
 )
 
 // Helper functions for common metric operations
@@ -269,4 +311,36 @@ func SetApplicationInfo(version, buildTime, goVersion string) {
 // UpdateUptime updates application uptime
 func UpdateUptime(seconds float64) {
 	UptimeSeconds.Set(seconds)
+}
+
+// Resilience and Fallback Metrics Functions
+
+// RecordFallbackActivation records when fallback from WebSocket to REST is activated
+func RecordFallbackActivation(reason, pair string) {
+	FallbackActivationsTotal.WithLabelValues(reason, pair).Inc()
+}
+
+// RecordFallbackDuration records the duration of a fallback operation
+func RecordFallbackDuration(pair string, duration float64) {
+	FallbackDuration.WithLabelValues(pair).Observe(duration)
+}
+
+// UpdateWebSocketConnectionStatus updates WebSocket connection status
+func UpdateWebSocketConnectionStatus(connected bool) {
+	status := 0.0
+	if connected {
+		status = 1.0
+	}
+	WebSocketConnectionStatus.WithLabelValues().Set(status)
+}
+
+// UpdateCircuitBreakerState updates circuit breaker state
+// state: 0=closed, 1=open, 2=half_open
+func UpdateCircuitBreakerState(service, endpoint string, state int) {
+	CircuitBreakerState.WithLabelValues(service, endpoint).Set(float64(state))
+}
+
+// RecordWebSocketReconnectionAttempt records WebSocket reconnection attempts
+func RecordWebSocketReconnectionAttempt(reason string) {
+	WebSocketReconnectionAttempts.WithLabelValues(reason).Inc()
 }
