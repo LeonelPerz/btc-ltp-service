@@ -433,7 +433,7 @@ func BenchmarkRestClient_GetTicker_With429Simulation(b *testing.B) {
 		}
 		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_ = json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
@@ -463,7 +463,7 @@ func BenchmarkRestClient_GetTicker_With5xxSimulation(b *testing.B) {
 		}
 		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_ = json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
@@ -489,7 +489,7 @@ func BenchmarkRestClient_BackoffPerformance_Comparison(b *testing.B) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockResponse)
+			_ = json.NewEncoder(w).Encode(mockResponse)
 		}))
 		defer server.Close()
 
@@ -517,7 +517,7 @@ func BenchmarkRestClient_BackoffPerformance_Comparison(b *testing.B) {
 			}
 			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockResponse)
+			_ = json.NewEncoder(w).Encode(mockResponse)
 		}))
 		defer server.Close()
 

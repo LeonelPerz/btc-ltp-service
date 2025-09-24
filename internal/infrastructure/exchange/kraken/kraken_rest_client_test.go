@@ -582,7 +582,7 @@ func TestRestClient_GetTicker_HTTP429_WithBackoff(t *testing.T) {
 		// Success on the third attempt
 		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_ = json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
@@ -650,7 +650,7 @@ func TestRestClient_GetTickers_HTTP429_WithBackoff(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_ = json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
@@ -684,7 +684,7 @@ func TestRestClient_GetTicker_HTTP5xx_WithBackoff(t *testing.T) {
 		// Success on second attempt
 		mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockResponse)
+		_ = json.NewEncoder(w).Encode(mockResponse)
 	}))
 	defer server.Close()
 
@@ -718,7 +718,7 @@ func TestRestClient_GetTicker_Mixed429And5xx_Errors(t *testing.T) {
 			// Success on third attempt
 			mockResponse := createMockKrakenResponse("XXBTZUSD", "50000.0")
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockResponse)
+			_ = json.NewEncoder(w).Encode(mockResponse)
 		}
 	}))
 	defer server.Close()

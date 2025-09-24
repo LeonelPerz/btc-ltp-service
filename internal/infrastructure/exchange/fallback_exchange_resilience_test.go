@@ -82,7 +82,7 @@ func TestFallbackExchange_ResilienceMatrix(t *testing.T) {
 
 			// Create fallback exchange
 			exchange := NewFallbackExchange(krakenConfig, []string{"BTC/USD"})
-			defer exchange.Close()
+			defer func() { _ = exchange.Close() }()
 
 			// Wait for potential WebSocket connection
 			time.Sleep(time.Millisecond * 50)
@@ -141,7 +141,7 @@ func TestFallbackExchange_CircuitBreakerThresholds(t *testing.T) {
 		}
 
 		exchange := NewFallbackExchange(krakenConfig, []string{})
-		defer exchange.Close()
+		defer func() { _ = exchange.Close() }()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
@@ -167,7 +167,7 @@ func TestFallbackExchange_CircuitBreakerThresholds(t *testing.T) {
 		}
 
 		exchange := NewFallbackExchange(krakenConfig, []string{})
-		defer exchange.Close()
+		defer func() { _ = exchange.Close() }()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
@@ -203,7 +203,7 @@ func TestFallbackExchange_MultipleRequestsResilience(t *testing.T) {
 	}
 
 	exchange := NewFallbackExchange(krakenConfig, []string{})
-	defer exchange.Close()
+	defer func() { _ = exchange.Close() }()
 
 	// Test multiple pairs at once
 	pairs := []string{"BTC/USD", "ETH/USD", "LTC/USD"}
@@ -299,7 +299,7 @@ func TestFallbackExchange_WebSocketStatus(t *testing.T) {
 		}
 
 		exchange := NewFallbackExchange(krakenConfig, []string{})
-		defer exchange.Close()
+		defer func() { _ = exchange.Close() }()
 
 		// Give some time for connection attempt
 		time.Sleep(time.Millisecond * 100)
@@ -322,7 +322,7 @@ func TestFallbackExchange_WebSocketStatus(t *testing.T) {
 		}
 
 		exchange := NewFallbackExchange(krakenConfig, []string{})
-		defer exchange.Close()
+		defer func() { _ = exchange.Close() }()
 
 		// Give some time for connection attempt to fail
 		time.Sleep(time.Millisecond * 100)
@@ -376,12 +376,12 @@ func TestFallbackExchange_ConfigurationValidation(t *testing.T) {
 			if tt.expectPanic {
 				assert.Panics(t, func() {
 					exchange := NewFallbackExchange(tt.config, []string{})
-					exchange.Close()
+					_ = exchange.Close()
 				}, tt.description)
 			} else {
 				assert.NotPanics(t, func() {
 					exchange := NewFallbackExchange(tt.config, []string{})
-					defer exchange.Close()
+					defer func() { _ = exchange.Close() }()
 
 					// Quick test to ensure basic functionality works
 					ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -412,7 +412,7 @@ func BenchmarkFallbackExchange_GetTicker(b *testing.B) {
 	}
 
 	exchange := NewFallbackExchange(krakenConfig, []string{})
-	defer exchange.Close()
+	defer func() { _ = exchange.Close() }()
 
 	ctx := context.Background()
 
@@ -446,7 +446,7 @@ func TestFallbackExchange_ErrorScenarios(t *testing.T) {
 		}
 
 		exchange := NewFallbackExchange(krakenConfig, []string{})
-		defer exchange.Close()
+		defer func() { _ = exchange.Close() }()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
